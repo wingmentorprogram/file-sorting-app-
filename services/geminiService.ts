@@ -1,9 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Document, GraphData, NodeType, Node, Link } from '../types';
 
-// Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 /**
  * Uses Gemini to analyze documents based on a query and return a graph structure.
  */
@@ -13,9 +10,12 @@ export const searchAndGenerateGraph = async (
 ): Promise<GraphData> => {
   if (!query) return { nodes: [], links: [] };
 
+  // Initialize client lazily to prevent top-level crashes
+  // Default to empty string if undefined to avoid constructor error, though API calls will fail gracefully later
+  const apiKey = process.env.API_KEY || '';
+  const ai = new GoogleGenAI({ apiKey });
+
   // Prepare context from mock documents
-  // In a real app, this would be a RAG system (Retrieval Augmented Generation)
-  // Here we send metadata of all docs since the list is small.
   const docsContext = documents.map(d => 
     `ID: ${d.id}, Title: ${d.title}, Project: ${d.project}, Content Snippet: ${d.content.substring(0, 100)}...`
   ).join('\n');
@@ -137,6 +137,9 @@ export const searchAndGenerateGraph = async (
 
 export const getDocumentSummary = async (doc: Document): Promise<string> => {
   try {
+    const apiKey = process.env.API_KEY || '';
+    const ai = new GoogleGenAI({ apiKey });
+    
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Summarize this document in 2 sentences: ${doc.content}`,

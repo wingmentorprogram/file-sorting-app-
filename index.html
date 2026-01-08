@@ -46,5 +46,13 @@
   <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
+    <script>
+      // Error Trap for debugging white screen in production
+      window.addEventListener('error', function(e) {
+        if(document.getElementById('root').innerHTML === "") {
+             console.error("App failed to mount:", e.error);
+        }
+      });
+    </script>
   </body>
 </html>

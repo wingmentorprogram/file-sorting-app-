@@ -7,20 +7,20 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     define: {
-      // Vercel/Vite environment variable handling for the SDK
-      'process.env.API_KEY': JSON.stringify(env.API_KEY)
+      // Safely expose API_KEY
+      'process.env.API_KEY': JSON.stringify(env.API_KEY),
+      // Polyfill process.env to prevent "process is not defined" crashes
+      'process.env': {} 
     },
     server: {
       host: true
     },
     build: {
-      chunkSizeWarningLimit: 1600, // Increased limit to suppress warnings
+      chunkSizeWarningLimit: 1600,
       rollupOptions: {
         output: {
           manualChunks: {
-            // Split core vendor libraries
             vendor: ['react', 'react-dom', 'lucide-react', 'recharts', 'd3'],
-            // Split GenAI SDK into its own chunk
             genai: ['@google/genai']
           }
         }
