@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, Upload, Share2, Grid, Folder, FileText, Settings, X, Plus, BarChart2, Moon, Sun, Network, Sprout, Minus, Flower2, ArrowRight, Edit3, MapPin, FolderOpen, Video, Image as ImageIcon, ChevronRight, ChevronDown, Eye, EyeOff, Music, Table, FolderPlus, FilePlus } from 'lucide-react';
+import { Search, Upload, Share2, Grid, Folder, FileText, Settings, X, Plus, BarChart2, Moon, Sun, Network, Sprout, Minus, Flower2, ArrowRight, Edit3, MapPin, FolderOpen, Video, Image as ImageIcon, ChevronRight, ChevronDown, Eye, EyeOff, Music, Table, FolderPlus, FilePlus, ArrowUp } from 'lucide-react';
 import MindMap from './components/MindMap';
 import Stats from './components/Stats';
 import { searchAndGenerateGraph, getDocumentSummary } from './services/geminiService';
@@ -269,6 +269,24 @@ function App() {
       if (selectedNode && nodesToDelete.has(selectedNode.id)) {
           setSelectedNode(null);
       }
+  };
+
+  const handleFoldParent = () => {
+    if (!selectedNode || selectedNode.id === 'root') return;
+    
+    const parentLink = masterGraphData.links.find(l => {
+        const t = typeof l.target === 'object' ? l.target.id : l.target;
+        return t === selectedNode.id;
+    });
+
+    if (parentLink) {
+        const parentId = typeof parentLink.source === 'object' ? parentLink.source.id : parentLink.source;
+        handleNodeUpdate(parentId as string, { collapsed: true });
+        
+        // Select parent since current node is hidden
+        const parentNode = masterGraphData.nodes.find(n => n.id === parentId);
+        if (parentNode) setSelectedNode(parentNode);
+    }
   };
 
   // Toggle visibility of children (The Blossom Feature)
@@ -936,9 +954,21 @@ function App() {
                          <button 
                             onClick={() => toggleNodeBlossom(selectedNode)}
                             className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded transition-colors ${selectedNode.collapsed ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}
+                            title={selectedNode.collapsed ? "Expand Children" : "Collapse Children"}
                          >
                              {selectedNode.collapsed ? <><EyeOff size={10} /> Bud</> : <><Eye size={10} /> Blossom</>}
                          </button>
+
+                         {/* Fold Parent Button */}
+                         {selectedNode.id !== 'root' && (
+                             <button 
+                                onClick={handleFoldParent}
+                                className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded transition-colors ${isDarkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+                                title="Fold Parent (Collapse parent node)"
+                             >
+                                 <ArrowUp size={10} /> Fold Parent
+                             </button>
+                         )}
                      </div>
                  </div>
                  <input 

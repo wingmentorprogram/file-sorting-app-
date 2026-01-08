@@ -1,7 +1,6 @@
-// ... (imports remain same)
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as d3 from 'd3';
-import { Circle, FileText, Folder, Image, Video, Flower2, Music, Table, Trash2 } from 'lucide-react';
+import { Circle, FileText, Folder, Image, Video, Flower2, Music, Table, Trash2, Eye, EyeOff, ArrowUp } from 'lucide-react';
 import { GraphData, Node, Link, NodeType, AppTheme, LinkStyle, NodeIconType, LayoutMode } from '../types';
 import { THEMES } from '../constants';
 
@@ -50,12 +49,10 @@ const makeRng = (seed: number) => {
 // Helper to generate organic, smooth curves (Natural Branch Effect)
 const generateNaturalPath = (x1: number, y1: number, x2: number, y2: number, level: number, seed: number) => {
     const rng = makeRng(seed);
-    const dist = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
     const isRight = x2 > x1;
 
     if (level === 1) {
         // Less straight, more organic curve for Level 1
-        // Relax the control point to 35-40% distance instead of 55%
         const cp1x = x1 + (x2 - x1) * 0.35; 
         const cp1y = y1 + (rng() * 30 - 15); // Add noticeable vertical waviness
 
@@ -135,7 +132,6 @@ const assignSides = (nodes: Node[], links: Link[]) => {
     return sideMap;
 };
 
-
 const MindMap: React.FC<MindMapProps> = ({ 
     data, 
     onNodeExpand, 
@@ -144,7 +140,7 @@ const MindMap: React.FC<MindMapProps> = ({
     onDeleteNode,
     theme, 
     linkStyle, 
-    layoutMode,
+    layoutMode, 
     focusedNodeId 
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -240,6 +236,30 @@ const MindMap: React.FC<MindMapProps> = ({
     return map;
   }, [data]);
 
+  const getNodeColor = (d: Node) => {
+      if (d.iconType === 'seed') return '#8d6e63';
+      
+      // Tree Mode Specifics
+      if (layoutMode === LayoutMode.SEED) {
+           if (d.id === 'root') return '#22c55e'; // Keep root green as base
+           
+           // Main Branches (Level 1 from root)
+           // Use vibrant Blue-600 for main branches
+           if (d.trunkTier !== undefined || d.level === 1) return '#2563eb'; 
+           
+           // Sub Branches (Projects/Categories)
+           // Use lighter Blue-400/500
+           if (d.type === NodeType.PROJECT || d.type === NodeType.CATEGORY) return '#3b82f6';
+           
+           // Leaves/Docs - Very light blue/sky
+           return '#60a5fa'; 
+      }
+
+      // Spider/Default Mode
+      if (d.type === NodeType.PROJECT) return '#0ea5e9'; // Sky-500
+      return d.color || themeColors.node;
+  };
+
   useEffect(() => {
     if (!svgRef.current || !data.nodes.length) return;
 
@@ -252,6 +272,13 @@ const MindMap: React.FC<MindMapProps> = ({
     if (defs.empty()) {
         defs = svg.append("defs");
         
+        // Node Glow Filter
+        const glow = defs.append("filter").attr("id", "nodeGlow").attr("x", "-50%").attr("y", "-50%").attr("width", "200%").attr("height", "200%");
+        glow.append("feGaussianBlur").attr("stdDeviation", "2.5").attr("result", "coloredBlur");
+        const feMerge = glow.append("feMerge");
+        feMerge.append("feMergeNode").attr("in", "coloredBlur");
+        feMerge.append("feMergeNode").attr("in", "SourceGraphic");
+
         const leafGrad = defs.append("linearGradient")
             .attr("id", "leafGradient")
             .attr("x1", "0%").attr("y1", "0%").attr("x2", "100%").attr("y2", "100%");
@@ -273,9 +300,31 @@ const MindMap: React.FC<MindMapProps> = ({
         trunkGrad.append("stop").attr("offset", "50%").attr("stop-color", "#6D4C41"); // Highlight center
         trunkGrad.append("stop").attr("offset", "80%").attr("stop-color", "#4E342E");
         trunkGrad.append("stop").attr("offset", "100%").attr("stop-color", "#3E2723"); // Dark edge
+
+        // Grass Gradient
+        const grassGrad = defs.append("linearGradient")
+            .attr("id", "grassGradient")
+            .attr("x1", "0%").attr("y1", "0%").attr("x2", "0%").attr("y2", "100%");
+        grassGrad.append("stop").attr("offset", "0%").attr("stop-color", "#65a30d"); // lime-600
+        grassGrad.append("stop").attr("offset", "100%").attr("stop-color", "#365314"); // lime-900
+
+        // Mountain Gradient
+        const mountainGrad = defs.append("linearGradient")
+            .attr("id", "mountainGradient")
+            .attr("x1", "0%").attr("y1", "0%").attr("x2", "0%").attr("y2", "100%");
+        mountainGrad.append("stop").attr("offset", "0%").attr("stop-color", "#94a3b8"); 
+        mountainGrad.append("stop").attr("offset", "100%").attr("stop-color", "#cbd5e1");
+        
+        // Cloud Gradient
+        const cloudGrad = defs.append("radialGradient")
+            .attr("id", "cloudGradient")
+            .attr("cx", "50%").attr("cy", "50%").attr("r", "50%");
+        cloudGrad.append("stop").attr("offset", "0%").attr("stop-color", "#ffffff").attr("stop-opacity", 0.8);
+        cloudGrad.append("stop").attr("offset", "100%").attr("stop-color", "#ffffff").attr("stop-opacity", 0);
     }
 
     // --- 1. SETUP LAYERS ---
+    // ... (rest of layer setup code remains the same as previous) ...
     let g = svg.select<SVGGElement>(".mindmap-group");
     if (g.empty()) {
       g = svg.append("g").attr("class", "mindmap-group");
@@ -296,13 +345,80 @@ const MindMap: React.FC<MindMapProps> = ({
     if (bgLayer.empty()) {
         bgLayer = g.insert("g", ":first-child").attr("class", "bg-layer");
         bgLayer.append("rect").attr("class", "sky-rect").attr("width", 200000).attr("x", -100000).attr("fill", "url(#skyGradient)");
-        bgLayer.append("rect").attr("class", "ground-rect").attr("width", 200000).attr("x", -100000).attr("fill", "#3f2c20");
+        
+        // Add layers for mountains and clouds
+        bgLayer.append("g").attr("class", "clouds-layer");
+        bgLayer.append("g").attr("class", "mountains-layer");
+
+        bgLayer.append("rect").attr("class", "ground-rect").attr("width", 200000).attr("x", -100000).attr("fill", "url(#grassGradient)");
+        
+        // Add layer for grass details
+        bgLayer.append("g").attr("class", "grass-details-layer");
     }
     
     if (layoutMode === LayoutMode.SEED) {
         bgLayer.attr("opacity", 1);
         bgLayer.select(".sky-rect").attr("y", -100000).attr("height", 100000 + horizonY);
         bgLayer.select(".ground-rect").attr("y", horizonY).attr("height", 100000);
+        
+        // --- Landscape Generation ---
+        
+        // 1. Mountains
+        const mountains = bgLayer.select(".mountains-layer");
+        mountains.selectAll("*").remove(); 
+        
+        const mtnLayers = [
+           { color: "#cbd5e1", opacity: 0.3, yOff: -50, amp: 150, freq: 0.002, seed: 100 },
+           { color: "#94a3b8", opacity: 0.5, yOff: -20, amp: 100, freq: 0.003, seed: 200 },
+           { color: "#64748b", opacity: 0.7, yOff: 0, amp: 60, freq: 0.005, seed: 300 }
+        ];
+
+        mtnLayers.forEach(l => {
+             const rng = makeRng(l.seed);
+             let d = `M-5000,${horizonY}`;
+             for(let x=-5000; x<=5000; x+=100) {
+                 const y = horizonY + l.yOff - Math.abs(Math.sin(x * l.freq) * l.amp) - (rng() * l.amp * 0.5);
+                 d += ` L${x},${y}`;
+             }
+             d += ` L5000,${horizonY} Z`;
+             mountains.append("path").attr("d", d).attr("fill", l.color).attr("opacity", l.opacity);
+        });
+
+        // 2. Clouds
+        const clouds = bgLayer.select(".clouds-layer");
+        clouds.selectAll("*").remove();
+        const cloudRng = makeRng(555);
+        for(let i=0; i<12; i++) {
+             const cx = (cloudRng() * 4000) - 2000;
+             const cy = (cloudRng() * (horizonY - 200)) - 300;
+             const scale = 1 + cloudRng();
+             
+             const puffs = 4 + Math.floor(cloudRng() * 3);
+             const g = clouds.append("g").attr("transform", `translate(${cx},${cy}) scale(${scale})`).attr("opacity", 0.6);
+             
+             for(let j=0; j<puffs; j++) {
+                 g.append("circle")
+                    .attr("cx", (cloudRng() * 60) - 30)
+                    .attr("cy", (cloudRng() * 30) - 15)
+                    .attr("r", 20 + cloudRng() * 20)
+                    .attr("fill", "url(#cloudGradient)");
+             }
+        }
+
+        // 3. Grass Details
+        const grass = bgLayer.select(".grass-details-layer");
+        grass.selectAll("*").remove();
+        const grassRng = makeRng(777);
+        let dGrass = "";
+        for(let x=-2000; x<=2000; x+=5 + grassRng()*10) {
+            if (grassRng() > 0.6) {
+                const h = 6 + grassRng() * 8;
+                const tilt = (grassRng() * 10) - 5;
+                dGrass += `M${x},${horizonY} q${tilt},${-h/2} 0,${-h} `;
+            }
+        }
+        grass.append("path").attr("d", dGrass).attr("stroke", "#bef264").attr("fill", "none").attr("opacity", 0.5);
+
     } else {
         bgLayer.attr("opacity", 0);
     }
@@ -354,7 +470,8 @@ const MindMap: React.FC<MindMapProps> = ({
       if (layoutMode === LayoutMode.SEED && d.id === 'root') {
           const groundY = height - 60;
           const isSapling = data.nodes.length <= 1;
-          const baseTrunkHeight = isSapling ? 100 : Math.min(550, 250 + (data.nodes.length * 10)); 
+          // IMPROVED: Much taller tree for full grown look
+          const baseTrunkHeight = isSapling ? 150 : Math.min(850, 450 + (data.nodes.length * 15)); 
           const targetRootY = groundY - baseTrunkHeight; 
 
           if (existing) {
@@ -402,8 +519,9 @@ const MindMap: React.FC<MindMapProps> = ({
                 // MAIN BRANCHES
                 if (sourceId === 'root' && target && target.trunkTier !== undefined) {
                     const tier = target.trunkTier;
-                    const minLength = 60;
-                    const maxLength = 140;
+                    // IMPROVED: Shorter main branches
+                    const minLength = 30;
+                    const maxLength = 90;
                     return minLength + (tier * (maxLength - minLength)); 
                 }
                 
@@ -478,15 +596,6 @@ const MindMap: React.FC<MindMapProps> = ({
         exit => exit.remove()
       );
 
-    const getNodeColor = (d: Node) => {
-        if (d.iconType === 'seed') return '#8d6e63';
-        if (d.type === NodeType.PROJECT) {
-            if (d.level === 1) return '#22c55e'; 
-            if ((d.level || 0) > 1) return '#3b82f6';
-        }
-        return d.color || (d.type === NodeType.PROJECT ? '#22c55e' : themeColors.node);
-    };
-
     const nodeGroup = nodeLayer.selectAll<SVGGElement, Node>(".node-group")
       .data(nodes, d => d.id)
       .join(
@@ -501,6 +610,7 @@ const MindMap: React.FC<MindMapProps> = ({
             .attr("stroke", "#fff")
             .attr("stroke-width", 2)
             .attr("cursor", "pointer")
+            .attr("filter", "url(#nodeGlow)") // Add Glow Filter
             .on("click", (event, d) => { 
                 event.stopPropagation(); 
                 onNodeSelect(d);
@@ -549,7 +659,20 @@ const MindMap: React.FC<MindMapProps> = ({
              if (d.type === NodeType.DOCUMENT && type === 'default') type = 'file';
              const iconPath = ICONS[type];
              if (iconPath) {
-                 group.append("path").attr("d", iconPath).attr("fill", "#ffffff").attr("transform", `translate(-10, -10) scale(0.8)`).attr("class", "node-icon").style("pointer-events", "none");
+                 // Add subtle drop shadow to icon via duplicate path with offset
+                 group.append("path")
+                      .attr("d", iconPath)
+                      .attr("fill", "black")
+                      .attr("fill-opacity", 0.2)
+                      .attr("transform", `translate(-9, -9) scale(0.8)`) // Offset slightly (+1,+1)
+                      .style("pointer-events", "none");
+
+                 group.append("path")
+                      .attr("d", iconPath)
+                      .attr("fill", "#ffffff")
+                      .attr("transform", `translate(-10, -10) scale(0.8)`)
+                      .attr("class", "node-icon")
+                      .style("pointer-events", "none");
              }
           });
 
@@ -583,9 +706,23 @@ const MindMap: React.FC<MindMapProps> = ({
              if (d.type === NodeType.PROJECT) type = 'folder';
              if (d.type === NodeType.DOCUMENT && type === 'default') type = 'file';
              const iconPath = ICONS[type];
-             group.select(".node-icon").remove();
+             group.selectAll("path").filter(function() { return !d3.select(this).classed("expand-icon"); }).remove(); // Clear old icons
+             
              if (iconPath) {
-                 group.append("path").attr("d", iconPath).attr("fill", "#ffffff").attr("transform", `translate(-10, -10) scale(0.8)`).attr("class", "node-icon").style("pointer-events", "none");
+                 // Shadow
+                 group.append("path")
+                      .attr("d", iconPath)
+                      .attr("fill", "black")
+                      .attr("fill-opacity", 0.2)
+                      .attr("transform", `translate(-9, -9) scale(0.8)`)
+                      .style("pointer-events", "none");
+                 // Main Icon
+                 group.append("path")
+                      .attr("d", iconPath)
+                      .attr("fill", "#ffffff")
+                      .attr("transform", `translate(-10, -10) scale(0.8)`)
+                      .attr("class", "node-icon")
+                      .style("pointer-events", "none");
              }
            });
            update.select(".node-circle").on("contextmenu", (event, d) => {
@@ -655,43 +792,57 @@ const MindMap: React.FC<MindMapProps> = ({
              grp.select(".bark-details").attr("d", detailsD);
 
              // --- Top Crown / False Tip Branches ---
-             // Faster growth: Cap at 10 nodes for full crown instead of 20
+             // Clean, non-jumbled implementation matching "Antler" style
              const growthProgress = Math.min(1, Math.max(0, (nodes.length - 1) / 10));
 
              const topBranchesData: any[] = [];
-             const topTwigsData: any[] = [];
+             const topSubBranchesData: any[] = [];
              const topLeavesData: any[] = [];
              
-             const topSeed = getHash(d.id + 'crown_v3');
+             // Use a consistent seed
+             const topSeed = getHash(d.id + 'crown_clean_final');
              const topRng = makeRng(topSeed);
              
-             const baseBranchCount = 3;
-             const growthBranchCount = Math.floor(growthProgress * 8); 
-             const totalTopBranches = baseBranchCount + growthBranchCount;
+             // Significantly reduced count for clean look
+             const baseBranchCount = 3; 
+             const extraBranches = Math.floor(growthProgress * 2); // Max +2 branches
+             const totalTopBranches = baseBranchCount + extraBranches;
              
-             const maxBranchLen = 40 + (growthProgress * 80); 
+             const maxBranchLen = 80 + (growthProgress * 70); 
+             
+             // Fan settings: ~140 degrees centered up
+             const fanSpread = Math.PI * 0.8; 
+             const startAngle = (-Math.PI / 2) - (fanSpread / 2);
              
              for(let i=0; i<totalTopBranches; i++) {
-                 const xOffset = (topRng() - 0.5) * trunkTopWidth * 0.9;
-                 const startX = rootX + xOffset;
-                 const startY = rootY + (topRng() * 10); 
+                 const progress = totalTopBranches > 1 ? i / (totalTopBranches - 1) : 0.5;
                  
-                 const fanAngle = Math.PI / 3 + (growthProgress * Math.PI / 2); 
-                 const baseAngle = -Math.PI / 2; 
-                 const angle = baseAngle + (topRng() - 0.5) * fanAngle;
+                 // 1. Angle & Direction
+                 // Add tiny noise to avoid robotic look
+                 const angleNoise = (topRng() - 0.5) * 0.1; 
+                 const angle = startAngle + (progress * fanSpread) + angleNoise;
+                 const isLeft = angle < -Math.PI/2;
                  
-                 const len = (maxBranchLen * 0.5) + (topRng() * maxBranchLen * 0.5);
+                 // 2. Origin on Trunk Top
+                 // Distribute origins to avoid bunching at single point
+                 const xOriginOffset = (progress - 0.5) * trunkTopWidth * 0.8;
+                 const startX = rootX + xOriginOffset;
+                 // Slight dip in middle for natural attachment
+                 const startY = rootY + (Math.abs(progress - 0.5) * 5); 
                  
+                 // 3. Branch Shape
+                 const len = maxBranchLen * (0.8 + (topRng() * 0.4));
                  const endX = startX + Math.cos(angle) * len;
                  const endY = startY + Math.sin(angle) * len;
                  
-                 const cpDist = len * 0.6;
-                 const bendFactor = (angle < baseAngle ? -1 : 1) * 0.2;
-                 const cpAngle = angle + bendFactor;
-                 const cpX = startX + Math.cos(cpAngle) * cpDist;
-                 const cpY = startY + Math.sin(cpAngle) * cpDist;
+                 // Control point for quadratic curve - bend upwards/outwards
+                 const cpDist = len * 0.5;
+                 // Bend logic: Left branches bend slightly left/up, Right bend right/up
+                 const bendAngle = angle + (isLeft ? -0.15 : 0.15); 
+                 const cpX = startX + Math.cos(bendAngle) * cpDist;
+                 const cpY = startY + Math.sin(bendAngle) * cpDist;
                  
-                 const width = Math.max(2, (8 + (growthProgress * 8)) * (1 - i/totalTopBranches)); 
+                 const width = Math.max(3, (9 + (growthProgress * 4)));
                  
                  topBranchesData.push({
                     d: `M${startX},${startY} Q${cpX},${cpY} ${endX},${endY}`,
@@ -699,46 +850,56 @@ const MindMap: React.FC<MindMapProps> = ({
                     color: "#5D4037"
                  });
                  
-                 const twigCount = Math.floor(topRng() * 3) + Math.floor(growthProgress * 4);
+                 // 4. Sub-branches (Twigs)
+                 // Clean placement: 1 or 2 twigs max
+                 const subCount = 1 + (topRng() > 0.5 ? 1 : 0);
                  
-                 for(let k=0; k<twigCount; k++) {
-                     const t = 0.3 + (k/twigCount) * 0.7; 
-                     const p = getPointOnQuadratic(t, {x:startX, y:startY}, {x:cpX, y:cpY}, {x:endX, y:endY});
+                 for(let j=0; j<subCount; j++) {
+                     // Place twigs in upper half of branch
+                     const tVal = 0.5 + (j * 0.25); 
+                     const p = getPointOnQuadratic(tVal, {x:startX, y:startY}, {x:cpX, y:cpY}, {x:endX, y:endY});
                      
-                     const pNext = getPointOnQuadratic(t+0.05, {x:startX, y:startY}, {x:cpX, y:cpY}, {x:endX, y:endY});
+                     // Calculate tangent angle at point p
+                     const pNext = getPointOnQuadratic(tVal+0.05, {x:startX, y:startY}, {x:cpX, y:cpY}, {x:endX, y:endY});
                      const dx = pNext.x - p.x;
                      const dy = pNext.y - p.y;
-                     const branchAng = Math.atan2(dy, dx);
-                     const side = topRng() > 0.5 ? 1 : -1;
-                     const twigAng = branchAng + (side * (Math.PI/3 + topRng()*0.5));
+                     const tanAngle = Math.atan2(dy, dx);
                      
-                     const twigLen = 10 + (topRng() * 20 * growthProgress);
-                     const tEndX = p.x + Math.cos(twigAng) * twigLen;
-                     const tEndY = p.y + Math.sin(twigAng) * twigLen;
+                     // Branch out perpendicular-ish
+                     // Alternating sides
+                     const side = (j % 2 === 0) ? 1 : -1;
+                     // Bias side based on main branch direction to look "open"
+                     const finalSide = isLeft ? (side * -1) : side;
+
+                     const subAngle = tanAngle + (finalSide * Math.PI / 4); 
+                     const subLen = len * 0.3;
                      
-                     const tCpX = (p.x + tEndX)/2;
-                     const tCpY = (p.y + tEndY)/2 - (topRng()*5);
+                     const subEndX = p.x + Math.cos(subAngle) * subLen;
+                     const subEndY = p.y + Math.sin(subAngle) * subLen;
                      
-                     topTwigsData.push({
-                         d: `M${p.x},${p.y} Q${tCpX},${tCpY} ${tEndX},${tEndY}`,
-                         width: Math.max(1, width * 0.4)
+                     const subCpX = (p.x + subEndX) / 2;
+                     const subCpY = (p.y + subEndY) / 2;
+
+                     topSubBranchesData.push({
+                         d: `M${p.x},${p.y} Q${subCpX},${subCpY} ${subEndX},${subEndY}`,
+                         width: width * 0.5
                      });
                      
-                     if(topRng() > 0.3) {
-                        topLeavesData.push({
-                            x: tEndX,
-                            y: tEndY,
-                            rotation: (twigAng * 180 / Math.PI) + 90,
-                            scale: 0.8 + (growthProgress * 0.5)
-                        });
-                     }
+                     // Leaf on sub-branch tip
+                     topLeavesData.push({
+                         x: subEndX,
+                         y: subEndY,
+                         rotation: (subAngle * 180 / Math.PI) + 90,
+                         scale: 0.7 + (growthProgress * 0.3)
+                     });
                  }
                  
+                 // Leaf on main branch tip
                  topLeavesData.push({
                      x: endX,
                      y: endY,
                      rotation: (angle * 180 / Math.PI) + 90,
-                     scale: 1.0 + (growthProgress * 0.8)
+                     scale: 1.0 + (growthProgress * 0.4)
                  });
              }
              
@@ -753,15 +914,18 @@ const MindMap: React.FC<MindMapProps> = ({
                 .attr("stroke-width", (b: any) => b.width)
                 .attr("opacity", 0.9);
 
-             grp.selectAll(".top-crown-twig")
-                .data(topTwigsData)
+             grp.selectAll(".top-crown-sub")
+                .data(topSubBranchesData)
                 .join(
-                    enter => enter.append("path").attr("class", "top-crown-twig").attr("fill", "none").attr("stroke", "#795548").attr("stroke-linecap", "round"),
+                    enter => enter.append("path").attr("class", "top-crown-sub").attr("fill", "none").attr("stroke", "#6D4C41").attr("stroke-linecap", "round"),
                     update => update,
                     exit => exit.remove()
                 )
                 .attr("d", (b: any) => b.d)
                 .attr("stroke-width", (b: any) => b.width);
+
+             // Clean up old twigs if they exist (removing old class logic)
+             grp.selectAll(".top-crown-twig").remove();
              
              grp.selectAll(".top-crown-leaf")
                 .data(topLeavesData)
@@ -1060,6 +1224,35 @@ const MindMap: React.FC<MindMapProps> = ({
       }
   };
 
+  const handleFoldBranch = () => {
+      if (contextMenu.nodeId) {
+          const node = data.nodes.find(n => n.id === contextMenu.nodeId);
+          if (node) {
+              onUpdateNode(node.id, { collapsed: !node.collapsed });
+          }
+          setContextMenu({ x: 0, y: 0, nodeId: null });
+      }
+  };
+
+  const handleFoldParent = () => {
+      if (contextMenu.nodeId && contextMenu.nodeId !== 'root') {
+          const parentLink = data.links.find(l => {
+               const t = typeof l.target === 'object' ? l.target.id : l.target;
+               return t === contextMenu.nodeId;
+          });
+          if (parentLink) {
+               const parentId = typeof parentLink.source === 'object' ? parentLink.source.id : parentLink.source;
+               onUpdateNode(parentId as string, { collapsed: true });
+               
+               // Optional: If you wanted to select the parent like in App.tsx, you'd need a prop for it.
+               // But usually context menu actions are purely manipulative.
+               const parentNode = data.nodes.find(n => n.id === parentId);
+               if (parentNode) onNodeSelect(parentNode);
+          }
+          setContextMenu({ x: 0, y: 0, nodeId: null });
+      }
+  };
+
   return (
     <div ref={containerRef} className="w-full h-full relative overflow-hidden">
       <svg ref={svgRef} className="w-full h-full block" />
@@ -1087,6 +1280,23 @@ const MindMap: React.FC<MindMapProps> = ({
             className={`z-50 rounded-xl shadow-2xl border min-w-[160px] overflow-hidden ${theme === AppTheme.CYBER ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
           >
               <div className="px-3 py-2 text-xs font-bold uppercase tracking-wider opacity-50 border-b border-gray-500/10">Actions</div>
+              
+              {/* Fold/Unfold Logic */}
+              <button onClick={handleFoldBranch} className="w-full text-left px-4 py-3 text-sm font-medium hover:bg-black/5 flex items-center gap-3">
+                  {data.nodes.find(n => n.id === contextMenu.nodeId)?.collapsed ? 
+                      <><Eye size={16} className="text-green-500" /> Expand Branch</> : 
+                      <><EyeOff size={16} className="text-red-500" /> Fold Branch</>
+                  }
+              </button>
+              
+              {contextMenu.nodeId !== 'root' && (
+                  <button onClick={handleFoldParent} className="w-full text-left px-4 py-3 text-sm font-medium hover:bg-black/5 flex items-center gap-3">
+                      <ArrowUp size={16} className="text-slate-500" /> Fold Parent
+                  </button>
+              )}
+
+              <div className="border-t border-gray-500/10 my-1"></div>
+              
               <button onClick={() => handleContextItemClick('folder')} className="w-full text-left px-4 py-3 text-sm font-medium hover:bg-black/5 flex items-center gap-3"><Folder size={16} className="text-amber-500" /> Folder</button>
               <button onClick={() => handleContextItemClick('video')} className="w-full text-left px-4 py-3 text-sm font-medium hover:bg-black/5 flex items-center gap-3"><Video size={16} className="text-violet-500" /> Video</button>
               <button onClick={() => handleContextItemClick('image')} className="w-full text-left px-4 py-3 text-sm font-medium hover:bg-black/5 flex items-center gap-3"><Image size={16} className="text-sky-500" /> Image</button>
