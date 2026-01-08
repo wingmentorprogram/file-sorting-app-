@@ -287,6 +287,47 @@ function App() {
      }
   };
 
+  const handleAddDocToGraph = (doc: Document) => {
+    // Check if already in graph
+    if (masterGraphData.nodes.some(n => n.id === doc.id)) return;
+
+    // Find parent to link to
+    const parentId = doc.parentId;
+    if (!parentId) return;
+
+    // Force expand parent so new node is visible
+    handleNodeUpdate(parentId, { collapsed: false });
+
+    const parentNode = masterGraphData.nodes.find(n => n.id === parentId);
+    const parentLevel = parentNode?.level || 0;
+
+    const newNode: Node = {
+      id: doc.id,
+      name: doc.title,
+      type: NodeType.DOCUMENT,
+      val: 10,
+      description: 'Manually added file',
+      iconType: doc.type === 'mp4' ? 'video' :
+                (doc.type === 'jpg' || doc.type === 'png') ? 'image' :
+                doc.type === 'mp3' ? 'music' :
+                (doc.type === 'xlsx' || doc.type === 'csv') ? 'spreadsheet' : 'file',
+      level: parentLevel + 1,
+      project: doc.project,
+      collapsed: false
+    };
+
+    const newLink = {
+      source: parentId,
+      target: doc.id,
+      value: 1
+    };
+
+    setMasterGraphData(prev => ({
+      nodes: [...prev.nodes, newNode],
+      links: [...prev.links, newLink]
+    }));
+  };
+
   const handleNodeSelect = async (node: Node) => {
     setSelectedNode(node);
     
@@ -956,8 +997,10 @@ function App() {
                          <span>Files ({attachedDocs.length})</span>
                      </h4>
                      <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
-                         {attachedDocs.map(doc => (
-                             <div key={doc.id} className={`p-3 rounded-lg flex items-center gap-3 transition-all ${isDarkMode ? 'bg-slate-800/50' : 'bg-white border border-slate-100'}`}>
+                         {attachedDocs.map(doc => {
+                             const isAlreadyInGraph = masterGraphData.nodes.some(n => n.id === doc.id);
+                             return (
+                             <div key={doc.id} className={`group p-3 rounded-lg flex items-center gap-3 transition-all ${isDarkMode ? 'bg-slate-800/50' : 'bg-white border border-slate-100'}`}>
                                  <div className={`w-8 h-8 rounded-md flex items-center justify-center ${isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-500'}`}>
                                      <FileText size={14} />
                                  </div>
@@ -965,8 +1008,24 @@ function App() {
                                      <div className="text-sm font-medium truncate">{doc.title}</div>
                                      <div className="text-[10px] opacity-50 uppercase">{doc.type}</div>
                                  </div>
+                                 
+                                 {/* Add to Map Button */}
+                                 {!isAlreadyInGraph ? (
+                                     <button 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleAddDocToGraph(doc);
+                                        }}
+                                        className={`p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all ${isDarkMode ? 'hover:bg-slate-600 text-cyan-400' : 'hover:bg-slate-200 text-blue-600'}`}
+                                        title="Add to Mind Map"
+                                     >
+                                        <Network size={16} />
+                                     </button>
+                                 ) : (
+                                     <span className="text-[10px] opacity-50 text-green-500 font-medium">Mapped</span>
+                                 )}
                              </div>
-                         ))}
+                         )})}
                      </div>
                   </div>
                 )}
