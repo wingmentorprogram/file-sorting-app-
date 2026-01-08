@@ -38,6 +38,7 @@ export interface Node {
   iconType?: NodeIconType; // Visual representation
   level?: number; // For tree hierarchy depth
   collapsed?: boolean; // Blossom feature: true if children are hidden
+  trunkTier?: number; // 0 to 1, where along the trunk this node attaches (Seed mode)
 }
 
 export interface Link {

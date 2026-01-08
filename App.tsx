@@ -92,15 +92,39 @@ function App() {
       ...prev,
       nodes: prev.nodes.map(n => {
         if (n.id === 'root') {
-          const isSeed = layoutMode === LayoutMode.SEED;
+          const isSeedMode = layoutMode === LayoutMode.SEED;
+          const isSingle = prev.nodes.length === 1;
+          
+          let targetIcon = n.iconType;
+          let targetColor = n.color;
+          let targetVal = n.val;
+
+          if (isSeedMode) {
+              // If we are in seed mode with just a root, ensure it starts as a seed for animation
+              if (isSingle) {
+                  targetIcon = 'seed';
+                  targetColor = '#8d6e63'; // Brown for seed
+                  targetVal = 10;
+              } else {
+                  targetIcon = 'tree';
+                  targetColor = '#22c55e';
+                  targetVal = 30;
+              }
+          } else {
+              // Spider Mode
+              targetIcon = 'default';
+              targetColor = '#ef4444'; // Red for spider root
+              targetVal = 25;
+          }
+
           return {
             ...n,
-            iconType: isSeed ? 'tree' : 'default',
-            color: isSeed ? '#22c55e' : undefined,
-            val: isSeed ? 30 : 25,
+            iconType: targetIcon as NodeIconType,
+            color: targetColor,
+            val: targetVal,
             fx: null, 
             fy: null,
-            collapsed: false // Always expanded initially
+            collapsed: false 
           };
         }
         return n;
@@ -112,15 +136,28 @@ function App() {
       setLayoutMode(mode);
       setIsLanding(false);
       
-      const startNodeName = mode === LayoutMode.SEED ? "Grow your idea starting here" : "MindSearch AI";
-      const startIcon: NodeIconType = mode === LayoutMode.SEED ? 'tree' : 'default';
-      const startColor = mode === LayoutMode.SEED ? '#22c55e' : undefined;
+      const startNodeName = mode === LayoutMode.SEED ? "Grow your idea tree" : "MindSearch AI";
+      // Explicitly start as SEED icon for Seed Mode
+      const startIcon: NodeIconType = mode === LayoutMode.SEED ? 'seed' : 'default';
+      const startColor = mode === LayoutMode.SEED ? '#8d6e63' : '#ef4444';
       
+      const rootNode: Node = { 
+          id: 'root', 
+          name: startNodeName, 
+          type: NodeType.ROOT, 
+          val: mode === LayoutMode.SEED ? 10 : 20, 
+          iconType: startIcon, 
+          color: startColor, 
+          description: 'Start searching to expand.', 
+          collapsed: false 
+      };
+      
+      const nodes = [rootNode];
+      const links: any[] = [];
+
       setMasterGraphData({
-        nodes: [
-            { id: 'root', name: startNodeName, type: NodeType.ROOT, val: mode === LayoutMode.SEED ? 5 : 20, iconType: startIcon, color: startColor, description: 'Start searching to expand.', collapsed: false }
-        ],
-        links: []
+        nodes,
+        links
       });
       setQuery('');
   };
@@ -139,9 +176,10 @@ function App() {
     try {
       const result = await searchAndGenerateGraph(query, documents);
       
-      const rootName = (masterGraphData.nodes.length === 1 && layoutMode === LayoutMode.SEED && masterGraphData.nodes[0].name.includes("Grow")) 
-        ? query 
-        : (masterGraphData.nodes.find(n => n.id === 'root')?.name || query);
+      const currentRoot = masterGraphData.nodes.find(n => n.id === 'root');
+      const isDefaultName = currentRoot?.name === "Grow your idea tree" || currentRoot?.name === "MindSearch AI" || currentRoot?.name === "Grow your idea starting here";
+      
+      const rootName = isDefaultName ? query : (currentRoot?.name || query);
 
       const rootNode: Node = {
         id: 'root',
@@ -150,7 +188,7 @@ function App() {
         val: layoutMode === LayoutMode.SEED ? 30 : 25,
         description: 'Search Query',
         color: layoutMode === LayoutMode.SEED ? '#22c55e' : '#ef4444',
-        iconType: layoutMode === LayoutMode.SEED ? 'tree' : 'default',
+        iconType: layoutMode === LayoutMode.SEED ? 'tree' : 'default', // Transforms to Tree on search
         level: 0,
         collapsed: false
       };
@@ -158,11 +196,12 @@ function App() {
       const newData: GraphData = {
         nodes: [rootNode, ...result.nodes.filter(n => n.id !== 'root').map((n, i) => ({
             ...n,
-            color: n.type === NodeType.PROJECT ? '#f59e0b' : NODE_COLORS[i % NODE_COLORS.length],
+            // Force Green for main projects/folders
+            color: n.type === NodeType.PROJECT ? '#22c55e' : NODE_COLORS[i % NODE_COLORS.length],
             iconType: (n.type === NodeType.PROJECT ? 'folder' : 'file') as NodeIconType,
             level: 1,
             project: n.type === NodeType.PROJECT ? n.name : 'General',
-            collapsed: true // New search results start collapsed ("buds")
+            collapsed: false 
         }))],
         links: result.links.map(l => ({
            source: typeof l.source === 'string' && l.source !== 'root' ? l.source : 'root',
@@ -193,6 +232,45 @@ function App() {
     }
   };
 
+  const handleDeleteNode = (nodeId: string) => {
+      if (nodeId === 'root') return; // Protect root
+
+      // Recursive delete logic to remove subtree
+      const nodesToDelete = new Set<string>();
+      const queue = [nodeId];
+
+      while(queue.length > 0) {
+          const currentId = queue.pop()!;
+          nodesToDelete.add(currentId);
+          
+          // Find children
+          const childrenLinks = masterGraphData.links.filter(l => {
+              const s = typeof l.source === 'object' ? l.source.id : l.source;
+              return s === currentId;
+          });
+          
+          childrenLinks.forEach(l => {
+              const t = typeof l.target === 'object' ? l.target.id : l.target;
+              if (!nodesToDelete.has(t as string)) {
+                  queue.push(t as string);
+              }
+          });
+      }
+
+      setMasterGraphData(prev => ({
+          nodes: prev.nodes.filter(n => !nodesToDelete.has(n.id)),
+          links: prev.links.filter(l => {
+              const s = typeof l.source === 'object' ? l.source.id : l.source;
+              const t = typeof l.target === 'object' ? l.target.id : l.target;
+              return !nodesToDelete.has(s as string) && !nodesToDelete.has(t as string);
+          })
+      }));
+
+      if (selectedNode && nodesToDelete.has(selectedNode.id)) {
+          setSelectedNode(null);
+      }
+  };
+
   // Toggle visibility of children (The Blossom Feature)
   const toggleNodeBlossom = (node: Node) => {
       handleNodeUpdate(node.id, { collapsed: !node.collapsed });
@@ -216,10 +294,14 @@ function App() {
     let newNodeColor = NODE_COLORS[Math.floor(Math.random() * NODE_COLORS.length)];
 
     if (layoutMode === LayoutMode.SEED) {
-        const verticalStep = -120; 
+        // Grow Sub-branches upwards (negative Y)
+        const verticalStep = -80; 
         const spreadFactor = (existingChildrenCount % 2 === 0 ? 1 : -1) * Math.ceil(existingChildrenCount / 2);
-        newBiasX = (parentNode.biasX || 0) + (spreadFactor * 60) + (Math.random() * 40 - 20);
-        newBiasY = (parentNode.biasY || 0) + verticalStep + (Math.random() * 40 - 20);
+        
+        // Slight X spread, Main movement is UP
+        newBiasX = (parentNode.biasX || 0) + (spreadFactor * 40);
+        newBiasY = (parentNode.biasY || 0) + verticalStep;
+        
         newNodeIcon = 'leaf';
         newNodeColor = '#84cc16'; 
     } else {
@@ -392,6 +474,8 @@ function App() {
                           iconType: 'folder',
                           level: (parentNode.level || 0) + index + 1,
                           project: parentNode.project,
+                          // If parent is root, this is Level 1 -> Green. Else -> Blue.
+                          color: parentId === 'root' ? '#22c55e' : '#3b82f6',
                           collapsed: true // Start FOLDED (Collapsed)
                        };
                        newNodes.push(folderNode);
@@ -724,9 +808,11 @@ function App() {
               onNodeExpand={handleNodeExpandInteraction}
               onNodeSelect={handleNodeSelect}
               onUpdateNode={handleNodeUpdate}
+              onDeleteNode={handleDeleteNode}
               theme={theme} 
               linkStyle={linkStyle} 
               layoutMode={layoutMode}
+              focusedNodeId={selectedNode?.id}
             />
           )}
 
