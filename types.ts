@@ -59,6 +59,7 @@ export interface Document {
   date: string;
   type: 'pdf' | 'docx' | 'txt' | 'md' | 'mp4' | 'png' | 'jpg' | 'mp3' | 'wav' | 'xlsx' | 'csv';
   tags: string[];
+  parentId?: string; // ID of the node this document belongs to
 }
 
 export enum AppTheme {

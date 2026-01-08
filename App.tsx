@@ -312,113 +312,143 @@ function App() {
       const newLinks: any[] = [];
       const newDocs: Document[] = [];
       
-      // Categorization Buckets
-      const buckets: Record<string, { name: string, icon: NodeIconType, color: string, files: File[] }> = {
-          'video': { name: 'Videos', icon: 'video', color: '#8b5cf6', files: [] },
-          'image': { name: 'Images', icon: 'image', color: '#0ea5e9', files: [] },
-          'audio': { name: 'Music', icon: 'music', color: '#ec4899', files: [] },
-          'data':  { name: 'Data', icon: 'spreadsheet', color: '#10b981', files: [] },
-          'doc':   { name: 'Documents', icon: 'file', color: '#f59e0b', files: [] }
-      };
+      // 1. Identify Root Folder(s) if expanding from directory upload
+      const rootFoldersMap = new Map<string, Node>(); // Name -> Node
 
       filesArray.forEach(file => {
-          // Filter system files / hidden files / settings
-          // This ensures we don't go "deep into settings" or link unwanted OS files
+          // Robust filter: System files, hidden files, or deep configs
           if (file.name.startsWith('.') || file.name.startsWith('__') || file.name === 'Thumbs.db' || file.name === 'desktop.ini') return;
+          const pathParts = file.webkitRelativePath ? file.webkitRelativePath.split('/') : [file.name];
           
+          // Deep filter: If any part of path starts with '.', skip it (e.g. .git/objects/...)
+          if (pathParts.some(part => part.startsWith('.'))) return;
+
+          let targetParentId = parentNode.id;
+          let currentLevel = (parentNode.level || 0);
+
+          // If it's a folder upload, structure it: Parent -> RootFolder -> SubFolder -> Category -> (Linked File)
+          // "Files within files" approach: Maintain folder structure
+          if (pathParts.length > 1) {
+              const dirParts = pathParts.slice(0, -1); // Parts excluding filename
+              
+              let currentPath = "";
+              let parentId = parentNode.id;
+
+              dirParts.forEach((part, index) => {
+                  const isRootFolder = index === 0;
+                  const key = currentPath ? `${currentPath}/${part}` : part;
+                  currentPath = key;
+
+                  if (!rootFoldersMap.has(key)) {
+                       // Create Directory Node
+                       const folderId = `folder-${key.replace(/\W/g, '')}-${Date.now()}`;
+                       const folderNode: Node = {
+                          id: folderId,
+                          name: part,
+                          type: NodeType.PROJECT,
+                          val: 18,
+                          description: `Folder: ${part}`,
+                          iconType: 'folder',
+                          level: (parentNode.level || 0) + index + 1,
+                          project: parentNode.project,
+                          collapsed: true // Start FOLDED (Collapsed)
+                       };
+                       newNodes.push(folderNode);
+                       newLinks.push({ source: parentId, target: folderId, value: 3 });
+                       rootFoldersMap.set(key, folderNode);
+                  }
+                  
+                  const node = rootFoldersMap.get(key)!;
+                  parentId = node.id;
+                  
+                  // Update target for file insertion
+                  targetParentId = node.id;
+                  currentLevel = node.level!;
+              });
+          }
+
+          // 2. Bucket into Type Categories (Images, Videos, etc.) UNDER the target parent
           const type = file.type;
           const name = file.name.toLowerCase();
           
+          let bucketKey = 'doc';
+          let bucketName = 'Documents';
+          let bucketIcon: NodeIconType = 'file';
+          let bucketColor = '#f59e0b';
+
           if (type.startsWith('video') || name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.avi')) {
-              buckets['video'].files.push(file);
+              bucketKey = 'video'; bucketName = 'Videos'; bucketIcon = 'video'; bucketColor = '#8b5cf6';
           } else if (type.startsWith('image') || name.endsWith('.jpg') || name.endsWith('.png') || name.endsWith('.gif') || name.endsWith('.webp')) {
-              buckets['image'].files.push(file);
+              bucketKey = 'image'; bucketName = 'Images'; bucketIcon = 'image'; bucketColor = '#0ea5e9';
           } else if (type.startsWith('audio') || name.endsWith('.mp3') || name.endsWith('.wav') || name.endsWith('.ogg')) {
-              buckets['audio'].files.push(file);
+              bucketKey = 'audio'; bucketName = 'Music'; bucketIcon = 'music'; bucketColor = '#ec4899';
           } else if (name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv') || name.endsWith('.json')) {
-              buckets['data'].files.push(file);
-          } else {
-              // Default to Doc
-              buckets['doc'].files.push(file);
+              bucketKey = 'data'; bucketName = 'Data'; bucketIcon = 'spreadsheet'; bucketColor = '#10b981';
           }
-      });
 
-      // Find existing Category children of parent to avoid duplicates
-      // We look at masterGraphData.links to find children, then match names/types
-      const existingChildrenLinks = masterGraphData.links.filter(l => (typeof l.source === 'string' ? l.source : l.source.id) === parentNode.id);
-      const existingChildrenIds = new Set(existingChildrenLinks.map(l => (typeof l.target === 'string' ? l.target : l.target.id)));
-      const existingChildren = masterGraphData.nodes.filter(n => existingChildrenIds.has(n.id));
-
-      Object.keys(buckets).forEach(key => {
-          const bucket = buckets[key];
-          if (bucket.files.length === 0) return;
-
-          // Check if category node exists
-          let categoryNode = existingChildren.find(n => n.name === bucket.name && n.type === NodeType.CATEGORY);
+          // Find or Create Category Node attached to targetParentId
+          // We need a unique ID based on parent + bucket to allow multiple "Images" nodes in different folders
+          const catNodeName = bucketName;
           
-          if (!categoryNode) {
-              // Create Category Node
-              const catId = `cat-${key}-${Date.now()}-${Math.random()}`;
-              categoryNode = {
-                  id: catId,
-                  name: bucket.name,
-                  type: NodeType.CATEGORY,
-                  val: 16,
-                  description: `Collection of ${bucket.name}`,
-                  iconType: bucket.icon, // Use the specific icon for the category folder
-                  color: bucket.color,
-                  level: (parentNode.level || 0) + 1,
-                  project: parentNode.project,
-                  collapsed: false, // Blossom open
-                  x: parentNode.x ? parentNode.x + (Math.random() * 100 - 50) : undefined,
-                  y: parentNode.y ? parentNode.y + (Math.random() * 100 - 50) : undefined
-              };
-              newNodes.push(categoryNode);
-              newLinks.push({ source: parentNode.id, target: catId, value: 3 });
+          // Check in current batch first
+          let catNode = newNodes.find(n => n.name === catNodeName && 
+              newLinks.some(l => l.source === targetParentId && l.target === n.id)
+          );
+
+          if (!catNode) {
+              // Check existing graph
+              const existingLinks = masterGraphData.links.filter(l => (typeof l.source === 'string' ? l.source : l.source.id) === targetParentId);
+              const existingNodeIds = new Set(existingLinks.map(l => (typeof l.target === 'string' ? l.target : l.target.id)));
+              const existingCatNode = masterGraphData.nodes.find(n => existingNodeIds.has(n.id) && n.name === catNodeName);
+              
+              if (existingCatNode) {
+                  catNode = existingCatNode;
+              } else {
+                  // Create New Category Node
+                  const catId = `cat-${bucketKey}-${targetParentId}-${Date.now()}-${Math.random()}`;
+                  catNode = {
+                      id: catId,
+                      name: bucketName,
+                      type: NodeType.CATEGORY,
+                      val: 15,
+                      description: `Collection of ${bucketName}`,
+                      iconType: bucketIcon,
+                      color: bucketColor,
+                      level: currentLevel + 1,
+                      project: parentNode.project,
+                      collapsed: false // Category nodes are leaves in graph, can't be folded further in graph sense
+                  };
+                  newNodes.push(catNode);
+                  newLinks.push({ source: targetParentId, target: catId, value: 2 });
+              }
           }
 
-          // Add Files to Category Node
-          bucket.files.forEach(file => {
-             const fileId = `file-${Date.now()}-${Math.random()}`;
+          // 3. Create Document Object (BUT NO GRAPH NODE)
+          // This ensures "it should not be able to show each individual image" in graph
+          const fileId = `file-${Date.now()}-${Math.random()}`;
+          let docType = 'txt';
+          if (name.endsWith('pdf')) docType = 'pdf';
+          else if (name.endsWith('docx')) docType = 'docx';
+          else if (name.endsWith('xlsx')) docType = 'xlsx';
+          else if (name.endsWith('mp3')) docType = 'mp3';
+          else if (name.endsWith('mp4')) docType = 'mp4';
              
-             // Determine specific doc type for metadata
-             let docType = 'txt';
-             const n = file.name.toLowerCase();
-             if (n.endsWith('pdf')) docType = 'pdf';
-             else if (n.endsWith('docx')) docType = 'docx';
-             else if (n.endsWith('xlsx')) docType = 'xlsx';
-             else if (n.endsWith('mp3')) docType = 'mp3';
-             else if (n.endsWith('mp4')) docType = 'mp4';
-             
-             const newDoc: Document = {
-                  id: fileId,
-                  title: file.name,
-                  content: "Uploaded content pending analysis...",
-                  project: parentNode.project || 'Repository',
-                  date: new Date().toISOString().split('T')[0],
-                  type: docType as any,
-                  tags: ['upload', key]
-             };
-             newDocs.push(newDoc);
-
-             const fileNode: Node = {
-                  id: fileId,
-                  name: file.name,
-                  type: NodeType.DOCUMENT,
-                  val: 10,
-                  description: `${bucket.name} file`,
-                  iconType: bucket.icon, // Inherit icon from bucket type
-                  level: (categoryNode!.level || 0) + 1,
-                  project: parentNode.project,
-                  collapsed: false
-             };
-             newNodes.push(fileNode);
-             newLinks.push({ source: categoryNode!.id, target: fileId, value: 1 }); // Weaker link for leaves
-          });
+          const newDoc: Document = {
+              id: fileId,
+              title: file.name,
+              content: "Uploaded content pending analysis...",
+              project: parentNode.project || 'Repository',
+              date: new Date().toISOString().split('T')[0],
+              type: docType as any,
+              tags: ['upload', bucketKey],
+              parentId: catNode.id // Link to the Category Node
+          };
+          newDocs.push(newDoc);
       });
 
       setDocuments(prev => [...prev, ...newDocs]);
       
+      // Update Graph
       setMasterGraphData(prev => ({
           nodes: prev.nodes.map(n => n.id === parentNode.id ? { ...n, collapsed: false } : n).concat(newNodes),
           links: [...prev.links, ...newLinks]
@@ -431,19 +461,25 @@ function App() {
             // Folder Upload
             processFileList(e.target.files, parentNode);
         } else {
-            // Single File Upload (Reuse logic but simplified)
+            // Single File Upload
             processFileList(e.target.files, parentNode);
         }
     }
   };
 
-  // Helper to get children for sidebar list
+  // Helper to get children for sidebar list (Graph Nodes)
   const getSelectedNodeChildren = () => {
       if (!selectedNode) return [];
       const childLinks = masterGraphData.links.filter(l => (typeof l.source === 'string' ? l.source : l.source.id) === selectedNode.id);
       const childIds = new Set(childLinks.map(l => (typeof l.target === 'string' ? l.target : l.target.id)));
       return masterGraphData.nodes.filter(n => childIds.has(n.id));
   };
+
+  // Helper to get attached documents (Leaf Files)
+  const getAttachedDocuments = () => {
+      if (!selectedNode) return [];
+      return documents.filter(d => d.parentId === selectedNode.id);
+  }
 
   const filteredChildren = getSelectedNodeChildren().filter(child => {
       if (sidebarTab === 'all') return true;
@@ -453,6 +489,17 @@ function App() {
       if (sidebarTab === 'audio') return child.iconType === 'music';
       if (sidebarTab === 'data') return child.iconType === 'spreadsheet';
       return true;
+  });
+
+  const attachedDocs = getAttachedDocuments().filter(doc => {
+     // Basic type filtering for attached docs
+     if (sidebarTab === 'all') return true;
+     if (sidebarTab === 'video') return doc.type === 'mp4';
+     if (sidebarTab === 'photo') return doc.type === 'jpg' || doc.type === 'png';
+     if (sidebarTab === 'doc') return doc.type === 'pdf' || doc.type === 'docx' || doc.type === 'txt';
+     if (sidebarTab === 'audio') return doc.type === 'mp3';
+     if (sidebarTab === 'data') return doc.type === 'xlsx' || doc.type === 'csv';
+     return true;
   });
 
   // --- RENDER LANDING PAGE ---
@@ -868,11 +915,11 @@ function App() {
                 {/* List of Children (Branches) */}
                 <div>
                    <h4 className="text-xs font-bold uppercase text-slate-400 mb-3 flex items-center justify-between">
-                       <span>File Repository ({filteredChildren.length})</span>
+                       <span>Branches ({filteredChildren.length})</span>
                    </h4>
                    <div className="space-y-2">
                        {filteredChildren.length === 0 ? (
-                           <p className="text-sm opacity-40 italic">No files in this branch repository.</p>
+                           <p className="text-sm opacity-40 italic">No sub-branches.</p>
                        ) : (
                            filteredChildren.map(child => (
                                <div key={child.id} onClick={() => handleNodeSelect(child)} className={`p-3 rounded-lg flex items-center gap-3 cursor-pointer transition-all ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700' : 'bg-slate-50 hover:bg-slate-100'}`}>
@@ -902,9 +949,31 @@ function App() {
                    </div>
                 </div>
 
+                {/* List of Attached Documents (Leaf Files) */}
+                {(attachedDocs.length > 0) && (
+                  <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                     <h4 className="text-xs font-bold uppercase text-slate-400 mb-3 flex items-center justify-between">
+                         <span>Files ({attachedDocs.length})</span>
+                     </h4>
+                     <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
+                         {attachedDocs.map(doc => (
+                             <div key={doc.id} className={`p-3 rounded-lg flex items-center gap-3 transition-all ${isDarkMode ? 'bg-slate-800/50' : 'bg-white border border-slate-100'}`}>
+                                 <div className={`w-8 h-8 rounded-md flex items-center justify-center ${isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-500'}`}>
+                                     <FileText size={14} />
+                                 </div>
+                                 <div className="flex-1 min-w-0">
+                                     <div className="text-sm font-medium truncate">{doc.title}</div>
+                                     <div className="text-[10px] opacity-50 uppercase">{doc.type}</div>
+                                 </div>
+                             </div>
+                         ))}
+                     </div>
+                  </div>
+                )}
+
                 {selectedNode.type === NodeType.DOCUMENT && (
                   <>
-                    <div className="border-t border-slate-100 dark:border-slate-800 pt-6">
+                    <div className="border-t border-slate-100 dark:border-slate-800 pt-6 mt-4">
                       <h4 className="text-xs font-bold uppercase text-slate-400 mb-2">Metadata</h4>
                       <div className="grid grid-cols-2 gap-4">
                         <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-slate-800' : 'bg-slate-50'}`}>
@@ -922,14 +991,14 @@ function App() {
                       </div>
                     </div>
 
-                    <div>
+                    <div className="mt-4">
                       <h4 className="text-xs font-bold uppercase text-slate-400 mb-2">Summary</h4>
                       <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
                          {selectedDocSummary || "Analysis pending..."}
                       </p>
                     </div>
 
-                    <div className="pt-2">
+                    <div className="pt-4">
                       <button className={`w-full py-3 px-4 rounded-xl flex items-center justify-center gap-2 font-medium transition-colors ${themeConfig.accent} text-white hover:opacity-90 shadow-lg`}>
                         Open Document
                       </button>

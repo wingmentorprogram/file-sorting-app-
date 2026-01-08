@@ -268,7 +268,7 @@ const MindMap: React.FC<MindMapProps> = ({ data, onNodeExpand, onNodeSelect, onU
         neighborMap.get(t)!.push(s);
     });
 
-    // --- 3. SIMULATION ---
+    // --- 3. SIMULATION (UPDATED FOR TIGHTER LAYOUT) ---
     let simulation = d3.forceSimulation<Node, Link>(nodes)
       .alpha(0.8)
       .alphaDecay(0.04)
@@ -295,10 +295,11 @@ const MindMap: React.FC<MindMapProps> = ({ data, onNodeExpand, onNodeSelect, onU
             }).strength(0.5)) 
             .force("x", d3.forceX<Node>(d => width/2 + (d.biasX || 0)).strength(0.2));
     } else {
+        // SPIDER MODE UPDATES: Much tighter forces
         simulation
-            .force("link", d3.forceLink<Node, Link>(links).id(d => d.id).distance(180)) 
-            .force("charge", d3.forceManyBody().strength(-1000).distanceMax(1000)) 
-            .force("collide", d3.forceCollide().radius(d => d.val * 4 + 15).strength(0.9)) 
+            .force("link", d3.forceLink<Node, Link>(links).id(d => d.id).distance(90)) // Reduced from 180 to 90
+            .force("charge", d3.forceManyBody().strength(-400).distanceMax(600)) // Reduced from -1000 to -400
+            .force("collide", d3.forceCollide().radius(d => d.val * 3 + 10).strength(0.9)) // Adjusted collision
             .force("center", d3.forceCenter(width / 2, height / 2).strength(0.05))
             .force("biasX", d3.forceX<Node>(d => width/2 + (d.biasX || 0)).strength(d => d.biasX !== undefined ? 0.35 : 0))
             .force("biasY", d3.forceY<Node>(d => height/2 + (d.biasY || 0)).strength(d => d.biasY !== undefined ? 0.35 : 0));
@@ -499,7 +500,6 @@ const MindMap: React.FC<MindMapProps> = ({ data, onNodeExpand, onNodeSelect, onU
 
     // --- 5. TICK ---
     simulation.on("tick", () => {
-      // (Simplified: Keeping existing tick logic essentially same, omitted for brevity as it is unchanged from previous block but included in final XML for completeness)
        if (layoutMode === LayoutMode.SEED) {
           const totalNodesCount = nodes.length;
           const trunkThickness = Math.min(180, 15 + (totalNodesCount * 3));
