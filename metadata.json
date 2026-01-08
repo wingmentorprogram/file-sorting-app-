@@ -1,0 +1,5 @@
+{
+  "name": "MindSearch AI",
+  "description": "An AI-powered documentation search engine utilizing a spider-web mind map interface for intuitive discovery and project management.",
+  "requestFramePermissions": []
+}
