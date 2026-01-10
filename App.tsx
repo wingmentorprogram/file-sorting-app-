@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, Upload, Share2, Grid, Folder, FileText, Settings, X, Plus, BarChart2, Moon, Sun, Network, Sprout, Minus, Flower2, ArrowRight, Edit3, MapPin, FolderOpen, Video, Image as ImageIcon, ChevronRight, ChevronDown, Eye, EyeOff, Music, Table, FolderPlus, FilePlus, ArrowUp, Trash2, FileSearch } from 'lucide-react';
+import { Search, Upload, Share2, Grid, Folder, FileText, Settings, X, Plus, BarChart2, Moon, Sun, Network, Sprout, Minus, Flower2, ArrowRight, Edit3, MapPin, FolderOpen, Video, Image as ImageIcon, ChevronRight, ChevronDown, Eye, EyeOff, Music, Table, FolderPlus, FilePlus, ArrowUp, Trash2, FileSearch, ExternalLink, Play, Link as LinkIcon, Download } from 'lucide-react';
 import MindMap from './components/MindMap';
 import Stats from './components/Stats';
 import ProjectsView from './components/ProjectsView';
@@ -488,9 +488,15 @@ function App() {
     if (node.type === NodeType.DOCUMENT) {
       const doc = documents.find(d => d.id === node.id);
       if (doc) {
-        setSelectedDocSummary("Loading summary...");
-        const summary = await getDocumentSummary(doc);
-        setSelectedDocSummary(summary);
+        if (!doc.fileUrl && !doc.externalUrl) {
+            setSelectedDocSummary("Loading summary...");
+            const summary = await getDocumentSummary(doc);
+            setSelectedDocSummary(summary);
+        } else if (doc.externalUrl) {
+            setSelectedDocSummary("External Linked Resource");
+        } else {
+            setSelectedDocSummary("Local file shortcut available.");
+        }
       } else {
         setSelectedDocSummary("This is a generated node for demonstration.");
       }
@@ -643,14 +649,17 @@ function App() {
               }
           }
 
-          // 3. Create Document Object (BUT NO GRAPH NODE)
+          // 3. Create Document Object with BLOB URL
           const fileId = `file-${Date.now()}-${Math.random()}`;
+          const fileUrl = URL.createObjectURL(file);
+          
           let docType = 'txt';
           if (name.endsWith('pdf')) docType = 'pdf';
           else if (name.endsWith('docx')) docType = 'docx';
           else if (name.endsWith('xlsx')) docType = 'xlsx';
           else if (name.endsWith('mp3')) docType = 'mp3';
           else if (name.endsWith('mp4')) docType = 'mp4';
+          else if (name.endsWith('jpg') || name.endsWith('png')) docType = 'jpg';
              
           const newDoc: Document = {
               id: fileId,
@@ -660,7 +669,8 @@ function App() {
               date: new Date().toISOString().split('T')[0],
               type: docType as any,
               tags: ['upload', bucketKey],
-              parentId: catNode.id // Link to the Category Node
+              parentId: catNode.id, // Link to the Category Node
+              fileUrl: fileUrl // Store local preview URL
           };
           newDocs.push(newDoc);
       });
@@ -680,8 +690,55 @@ function App() {
     }
   };
 
+  const handleAddLinkToNode = (parentNode: Node) => {
+      const url = prompt("Enter the external link URL (e.g. Google Drive link):");
+      if (!url) return;
+      
+      const name = prompt("Enter a name for this link:") || "External Link";
+      
+      const linkId = `link-${Date.now()}-${Math.random()}`;
+      
+      // Create Document for the Link
+      const newDoc: Document = {
+          id: linkId,
+          title: name,
+          content: `External Link to: ${url}`,
+          project: parentNode.project || 'Links',
+          date: new Date().toISOString().split('T')[0],
+          type: 'link',
+          tags: ['link', 'external'],
+          parentId: parentNode.id,
+          externalUrl: url
+      };
+      
+      setDocuments(prev => [...prev, newDoc]);
+      
+      // We don't necessarily need a new GRAPH node if it's just a file in the sidebar list.
+      // However, if we want it to be a visual leaf node, we can add it.
+      // Let's add it as a leaf node to be consistent with visualization.
+      
+      const newNode: Node = {
+          id: linkId,
+          name: name,
+          type: NodeType.DOCUMENT,
+          val: 10,
+          description: `Link to ${url}`,
+          iconType: 'link', // Use link icon
+          level: (parentNode.level || 0) + 1,
+          project: parentNode.project,
+          color: '#8b5cf6', // Violet for links
+          collapsed: false
+      };
+      
+      setMasterGraphData(prev => ({
+          nodes: [...prev.nodes, newNode],
+          links: [...prev.links, { source: parentNode.id, target: linkId, value: 1 }]
+      }));
+      
+      handleNodeUpdate(parentNode.id, { collapsed: false });
+  };
+
   const handleConnectDrive = () => {
-      // Mock Connection
       setIsDriveConnected(true);
       
       const driveId = 'drive-root';
@@ -698,7 +755,6 @@ function App() {
           collapsed: false
       };
       
-      // Mock Subfolders
       const sub1: Node = {
           id: 'drive-sub-1',
           name: 'Shared with me',
@@ -725,17 +781,65 @@ function App() {
           collapsed: true
       };
 
+      // Create Mock Drive Documents with Links
+      const driveDocs: Document[] = [
+          {
+              id: 'gdoc-1',
+              title: 'Q3 Planning.gdoc',
+              content: 'Cloud hosted document...',
+              project: 'Cloud',
+              date: '2024-05-20',
+              type: 'docx',
+              tags: ['drive', 'planning'],
+              parentId: sub1.id,
+              externalUrl: 'https://docs.google.com'
+          },
+           {
+              id: 'gslides-1',
+              title: 'Pitch Deck.gslides',
+              content: 'Cloud hosted slides...',
+              project: 'Cloud',
+              date: '2024-05-22',
+              type: 'pdf',
+              tags: ['drive', 'presentation'],
+              parentId: sub1.id,
+              externalUrl: 'https://slides.google.com'
+          }
+      ];
+      
+      // Create visual nodes for these docs
+      const docNodes = driveDocs.map(d => ({
+          id: d.id,
+          name: d.title,
+          type: NodeType.DOCUMENT,
+          val: 10,
+          description: 'Google Drive File',
+          iconType: 'file' as NodeIconType,
+          color: '#10b981',
+          level: 3,
+          project: 'Cloud'
+      }));
+      
+      const docLinks = driveDocs.map(d => ({
+          source: d.parentId!,
+          target: d.id,
+          value: 1
+      }));
+
+      setDocuments(prev => [...prev, ...driveDocs]);
+
       setMasterGraphData(prev => ({
-          nodes: [...prev.nodes, driveNode, sub1, sub2],
+          nodes: [...prev.nodes, driveNode, sub1, sub2, ...docNodes],
           links: [
               ...prev.links,
               { source: 'root', target: driveId, value: 3 },
               { source: driveId, target: sub1.id, value: 2 },
-              { source: driveId, target: sub2.id, value: 2 }
+              { source: driveId, target: sub2.id, value: 2 },
+              ...docLinks
           ]
       }));
       
-      alert("Google Drive Connected! Folders added to your graph.");
+      alert("Google Drive Connected! Folders and files added.");
   };
 
   // Helper to get children for sidebar list (Graph Nodes)
@@ -752,26 +856,10 @@ function App() {
       return documents.filter(d => d.parentId === selectedNode.id);
   }
 
-  const filteredChildren = getSelectedNodeChildren().filter(child => {
-      if (sidebarTab === 'all') return true;
-      if (sidebarTab === 'video') return child.iconType === 'video';
-      if (sidebarTab === 'photo') return child.iconType === 'image';
-      if (sidebarTab === 'doc') return child.iconType === 'file' || child.iconType === 'default';
-      if (sidebarTab === 'audio') return child.iconType === 'music';
-      if (sidebarTab === 'data') return child.iconType === 'spreadsheet';
-      return true;
-  });
+  const attachedDocs = getAttachedDocuments();
+  const subFolders = getSelectedNodeChildren().filter(n => n.type === NodeType.PROJECT || n.type === NodeType.CATEGORY);
 
-  const attachedDocs = getAttachedDocuments().filter(doc => {
-     // Basic type filtering for attached docs
-     if (sidebarTab === 'all') return true;
-     if (sidebarTab === 'video') return doc.type === 'mp4';
-     if (sidebarTab === 'photo') return doc.type === 'jpg' || doc.type === 'png';
-     if (sidebarTab === 'doc') return doc.type === 'pdf' || doc.type === 'docx' || doc.type === 'txt';
-     if (sidebarTab === 'audio') return doc.type === 'mp3';
-     if (sidebarTab === 'data') return doc.type === 'xlsx' || doc.type === 'csv';
-     return true;
-  });
+  const selectedDoc = selectedNode?.type === NodeType.DOCUMENT ? documents.find(d => d.id === selectedNode.id) : null;
 
   // --- RENDER LANDING PAGE ---
   if (isLanding) {
@@ -961,20 +1049,82 @@ function App() {
             
             {/* Context Panel (Right Sidebar for selected node) */}
             {selectedNode && (
-                <div className={`absolute top-4 right-4 w-80 max-h-[calc(100%-2rem)] rounded-2xl shadow-2xl border flex flex-col overflow-hidden backdrop-blur-md transition-all ${isDarkMode ? 'bg-slate-900/90 border-slate-700 text-slate-200' : 'bg-white/90 border-slate-200 text-slate-800'}`}>
+                <div className={`absolute top-4 right-4 z-50 w-96 max-h-[calc(100%-2rem)] rounded-2xl shadow-2xl border flex flex-col overflow-hidden backdrop-blur-md transition-all ${isDarkMode ? 'bg-slate-900/90 border-slate-700 text-slate-200' : 'bg-white/90 border-slate-200 text-slate-800'}`}>
                     <div className={`p-4 border-b flex items-center justify-between ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
                         <div className="flex items-center gap-2 font-bold">
                            {selectedNode.type === NodeType.PROJECT ? <Folder size={18} className="text-blue-500" /> : 
                             selectedNode.type === NodeType.ROOT ? <Network size={18} className="text-purple-500" /> :
+                            selectedNode.type === NodeType.CATEGORY ? <FolderOpen size={18} className="text-orange-500" /> :
+                            selectedNode.iconType === 'link' ? <LinkIcon size={18} className="text-violet-500" /> :
                             <FileText size={18} className="text-emerald-500" />}
-                           <span className="truncate max-w-[180px]">{selectedNode.name}</span>
+                           <span className="truncate max-w-[240px]">{selectedNode.name}</span>
                         </div>
                         <button onClick={() => setSelectedNode(null)} className="p-1 hover:bg-black/10 rounded-full">
                             <X size={16} />
                         </button>
                     </div>
                     
-                    <div className="p-4 flex-1 overflow-y-auto space-y-4">
+                    <div className="p-4 flex-1 overflow-y-auto space-y-6">
+                        
+                        {/* 1. MEDIA PREVIEW (For Documents) */}
+                        {selectedNode.type === NodeType.DOCUMENT && selectedDoc && (
+                            <div className="rounded-xl overflow-hidden bg-black/5 border border-black/5 relative">
+                                {selectedDoc.externalUrl ? (
+                                    <div className="p-8 flex flex-col items-center justify-center gap-3 bg-slate-100 dark:bg-slate-800">
+                                        <ExternalLink size={32} className="text-blue-500" />
+                                        <p className="text-xs text-center opacity-60 break-all">{selectedDoc.externalUrl}</p>
+                                        <a 
+                                            href={selectedDoc.externalUrl} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors flex items-center gap-2"
+                                        >
+                                            <ExternalLink size={14} /> Open Link
+                                        </a>
+                                    </div>
+                                ) : selectedDoc.fileUrl ? (
+                                    selectedDoc.type === 'mp4' ? (
+                                        <video src={selectedDoc.fileUrl} controls className="w-full h-auto max-h-60 object-contain bg-black" />
+                                    ) : selectedDoc.type === 'jpg' || selectedDoc.type === 'png' ? (
+                                        <img src={selectedDoc.fileUrl} alt="Preview" className="w-full h-auto max-h-60 object-contain bg-black/20" />
+                                    ) : selectedDoc.type === 'mp3' ? (
+                                        <div className="p-6 flex flex-col items-center justify-center gap-4 bg-slate-900 text-white">
+                                            <Music size={48} className="animate-pulse" />
+                                            <audio src={selectedDoc.fileUrl} controls className="w-full" />
+                                        </div>
+                                    ) : (
+                                        <div className="p-8 flex flex-col items-center justify-center opacity-50 gap-3">
+                                            <FileText size={48} className="mb-2" />
+                                            <a 
+                                                href={selectedDoc.fileUrl} 
+                                                download={selectedDoc.title}
+                                                className="px-4 py-2 bg-slate-200 dark:bg-slate-700 rounded-lg text-xs font-bold hover:opacity-80 transition-colors flex items-center gap-2"
+                                            >
+                                                <Download size={14} /> Open/Download
+                                            </a>
+                                        </div>
+                                    )
+                                ) : (
+                                    <div className="p-8 flex flex-col items-center justify-center opacity-50">
+                                        <FileText size={48} className="mb-2" />
+                                        <span className="text-xs">Text Document</span>
+                                    </div>
+                                )}
+                                
+                                {selectedDoc.fileUrl && !['pdf', 'txt'].includes(selectedDoc.type) && (
+                                    <a 
+                                        href={selectedDoc.fileUrl} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="absolute top-2 right-2 p-2 bg-black/50 hover:bg-black/70 text-white rounded-lg backdrop-blur-md transition-colors"
+                                        title="Open in new tab"
+                                    >
+                                        <ExternalLink size={16} />
+                                    </a>
+                                )}
+                            </div>
+                        )}
+
                         <div>
                             <label className="text-xs font-bold uppercase tracking-wider opacity-50 mb-1 block">Description</label>
                             <p className="text-sm leading-relaxed opacity-90">{selectedDocSummary || selectedNode.description}</p>
@@ -990,36 +1140,87 @@ function App() {
                              </button>
                         </div>
 
-                         {/* Attachments Section */}
-                        {selectedNode.type === NodeType.CATEGORY || selectedNode.type === NodeType.PROJECT || selectedNode.type === NodeType.ROOT ? (
+                        {/* 2. SUB-DIRECTORIES (Quick Navigation) */}
+                        {(selectedNode.type === NodeType.CATEGORY || selectedNode.type === NodeType.PROJECT || selectedNode.type === NodeType.ROOT) && subFolders.length > 0 && (
                              <div>
                                 <label className="text-xs font-bold uppercase tracking-wider opacity-50 mb-2 block flex items-center justify-between">
-                                    Files
+                                    Directories
+                                    <span className="text-[10px] bg-blue-500/20 text-blue-500 px-1.5 py-0.5 rounded">{subFolders.length}</span>
+                                </label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {subFolders.map(child => (
+                                        <button 
+                                            key={child.id}
+                                            onClick={() => handleNodeSelect(child)}
+                                            className={`flex items-center gap-2 p-2 rounded-lg text-sm text-left transition-colors ${isDarkMode ? 'bg-slate-800/50 hover:bg-slate-800 border border-slate-700' : 'bg-slate-50 hover:bg-slate-100 border border-slate-200'}`}
+                                        >
+                                            <Folder size={14} className="text-blue-500 flex-shrink-0" />
+                                            <span className="truncate">{child.name}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                             </div>
+                        )}
+
+                         {/* 3. ATTACHED FILES */}
+                        {(selectedNode.type === NodeType.CATEGORY || selectedNode.type === NodeType.PROJECT || selectedNode.type === NodeType.ROOT) ? (
+                             <div>
+                                <label className="text-xs font-bold uppercase tracking-wider opacity-50 mb-2 block flex items-center justify-between">
+                                    Files & Shortcuts
                                     <span className="text-[10px] bg-slate-500/20 px-1.5 py-0.5 rounded">{attachedDocs.length}</span>
                                 </label>
                                 <div className="space-y-2">
                                     {attachedDocs.length > 0 ? attachedDocs.map(doc => (
-                                        <div key={doc.id} className={`flex items-center gap-2 p-2 rounded-lg text-sm border ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
-                                            {doc.type === 'mp4' ? <Video size={14} className="text-purple-500" /> : 
-                                             doc.type === 'jpg' ? <ImageIcon size={14} className="text-sky-500" /> :
+                                        <div 
+                                            key={doc.id} 
+                                            // Find the node corresponding to this doc to select it
+                                            onClick={() => {
+                                                const fileNode = masterGraphData.nodes.find(n => n.id === doc.id);
+                                                if (fileNode) handleNodeSelect(fileNode);
+                                            }}
+                                            className={`flex items-center gap-2 p-2 rounded-lg text-sm border cursor-pointer transition-colors ${isDarkMode ? 'bg-slate-800/50 border-slate-700 hover:bg-slate-800' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}`}
+                                        >
+                                            {doc.externalUrl ? <LinkIcon size={14} className="text-violet-500" /> :
+                                             doc.type === 'mp4' ? <Video size={14} className="text-purple-500" /> : 
+                                             doc.type === 'jpg' || doc.type === 'png' ? <ImageIcon size={14} className="text-sky-500" /> :
+                                             doc.type === 'mp3' ? <Music size={14} className="text-pink-500" /> :
                                              <FileText size={14} className="text-slate-500" />}
                                             <span className="truncate flex-1">{doc.title}</span>
+                                            {doc.externalUrl && <ExternalLink size={12} className="opacity-50" />}
                                         </div>
                                     )) : (
                                         <div className="text-xs opacity-50 text-center py-4 border border-dashed rounded-lg">No files attached</div>
                                     )}
                                     
                                     {/* Upload Triggers */}
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-2 mt-4">
                                         <label className={`flex-1 flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-dashed cursor-pointer text-[10px] font-bold transition-colors ${isDarkMode ? 'border-slate-700 hover:bg-slate-800 text-slate-400' : 'border-slate-300 hover:bg-slate-50 text-slate-500'}`}>
-                                             <input type="file" multiple className="hidden" onChange={(e) => handleFileUploadToNode(e, selectedNode)} />
-                                             <FilePlus size={16} /> Add Files
+                                             <input 
+                                                 type="file" 
+                                                 multiple 
+                                                 className="hidden" 
+                                                 onChange={(e) => handleFileUploadToNode(e, selectedNode)}
+                                                 onClick={(e) => (e.currentTarget.value = '')}
+                                             />
+                                             <FilePlus size={16} /> Add File
                                         </label>
                                         <label className={`flex-1 flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-dashed cursor-pointer text-[10px] font-bold transition-colors ${isDarkMode ? 'border-slate-700 hover:bg-slate-800 text-slate-400' : 'border-slate-300 hover:bg-slate-50 text-slate-500'}`}>
-                                             {/* webkitdirectory attribute handled via spread to avoid TS strict check issues in some envs */}
-                                             <input type="file" multiple {...({ webkitdirectory: "" } as any)} className="hidden" onChange={(e) => handleFileUploadToNode(e, selectedNode)} />
+                                             <input 
+                                                 type="file" 
+                                                 multiple 
+                                                 {...({ webkitdirectory: "" } as any)} 
+                                                 className="hidden" 
+                                                 onChange={(e) => handleFileUploadToNode(e, selectedNode)}
+                                                 onClick={(e) => (e.currentTarget.value = '')}
+                                             />
                                              <FolderPlus size={16} /> Add Folder
                                         </label>
+                                        <button 
+                                            onClick={() => handleAddLinkToNode(selectedNode)}
+                                            className={`flex-1 flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-dashed cursor-pointer text-[10px] font-bold transition-colors ${isDarkMode ? 'border-slate-700 hover:bg-slate-800 text-slate-400' : 'border-slate-300 hover:bg-slate-50 text-slate-500'}`}
+                                        >
+                                             <LinkIcon size={16} /> Add Link
+                                        </button>
                                     </div>
                                 </div>
                              </div>

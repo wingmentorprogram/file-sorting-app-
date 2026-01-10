@@ -15,7 +15,7 @@ export enum LayoutMode {
   SEED = 'Seed'
 }
 
-export type NodeIconType = 'default' | 'folder' | 'video' | 'image' | 'file' | 'seed' | 'tree' | 'leaf' | 'music' | 'spreadsheet';
+export type NodeIconType = 'default' | 'folder' | 'video' | 'image' | 'file' | 'seed' | 'tree' | 'leaf' | 'music' | 'spreadsheet' | 'link';
 
 export interface Node {
   id: string;
@@ -58,9 +58,11 @@ export interface Document {
   content: string;
   project: string;
   date: string;
-  type: 'pdf' | 'docx' | 'txt' | 'md' | 'mp4' | 'png' | 'jpg' | 'mp3' | 'wav' | 'xlsx' | 'csv';
+  type: 'pdf' | 'docx' | 'txt' | 'md' | 'mp4' | 'png' | 'jpg' | 'mp3' | 'wav' | 'xlsx' | 'csv' | 'link';
   tags: string[];
   parentId?: string; // ID of the node this document belongs to
+  fileUrl?: string; // Blob URL for local preview
+  externalUrl?: string; // URL to external resource (Drive, Website)
 }
 
 export enum AppTheme {
