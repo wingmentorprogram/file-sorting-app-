@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, Upload, Share2, Grid, Folder, FileText, Settings, X, Plus, BarChart2, Moon, Sun, Network, Sprout, Minus, Flower2, ArrowRight, Edit3, MapPin, FolderOpen, Video, Image as ImageIcon, ChevronRight, ChevronDown, Eye, EyeOff, Music, Table, FolderPlus, FilePlus, ArrowUp } from 'lucide-react';
+import { Search, Upload, Share2, Grid, Folder, FileText, Settings, X, Plus, BarChart2, Moon, Sun, Network, Sprout, Minus, Flower2, ArrowRight, Edit3, MapPin, FolderOpen, Video, Image as ImageIcon, ChevronRight, ChevronDown, Eye, EyeOff, Music, Table, FolderPlus, FilePlus, ArrowUp, Trash2 } from 'lucide-react';
 import MindMap from './components/MindMap';
 import Stats from './components/Stats';
 import { searchAndGenerateGraph, getDocumentSummary } from './services/geminiService';
@@ -692,7 +692,7 @@ function App() {
                         <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 transition-colors ${isDarkMode ? 'bg-slate-700 group-hover:bg-emerald-900 text-emerald-400' : 'bg-green-50 group-hover:bg-green-100 text-green-600'}`}>
                              <Flower2 size={32} />
                         </div>
-                        <h3 className="text-2xl font-bold mb-2">Planting Seed</h3>
+                        <h3 className="text-2xl font-bold mb-2">Tree Map</h3>
                         <p className="opacity-60 mb-6 min-h-[3rem]">
                             An organic, growth-based interface. Ideas start as a seed in the ground and grow upwards like a tree against a sky backdrop.
                         </p>
@@ -778,416 +778,155 @@ function App() {
       <main className="flex-1 relative flex flex-col h-full overflow-hidden">
         
         {/* Top Header / Search */}
-        <div className="absolute top-0 left-0 right-0 z-20 p-4 md:p-6 flex justify-between items-start pointer-events-none">
-           <div className="w-full max-w-2xl pointer-events-auto">
-             <form onSubmit={handleSearch} className="relative group">
-                <div className={`absolute inset-0 rounded-2xl blur opacity-25 group-hover:opacity-40 transition duration-300 ${themeConfig.accent}`}></div>
-                <div className={`relative flex items-center rounded-2xl shadow-xl overflow-hidden ${isDarkMode ? 'bg-slate-800/90 text-white' : 'bg-white/90 text-slate-900'} backdrop-blur-sm border ${isDarkMode ? 'border-slate-700' : 'border-slate-100'}`}>
-                  <Search className="ml-4 opacity-50" size={20} />
-                  <input 
-                    type="text" 
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder={layoutMode === LayoutMode.SEED ? "Plant your idea seed..." : "Search documents with AI..."}
-                    className="w-full bg-transparent border-none outline-none p-4 placeholder-opacity-50"
-                  />
-                  {isLoading ? (
-                    <div className="mr-4 w-5 h-5 border-2 border-t-transparent border-current rounded-full animate-spin"></div>
-                  ) : (
-                    <button type="submit" className={`mr-2 px-4 py-2 rounded-xl text-sm font-bold text-white transition-transform active:scale-95 ${themeConfig.accent}`}>
-                      {layoutMode === LayoutMode.SEED ? "Grow" : "Search"}
-                    </button>
-                  )}
-                </div>
-             </form>
-             {query && !isLoading && visibleGraphData.nodes.length > 1 && (
-                <div className="mt-2 text-xs opacity-60 ml-2">
-                   Active {visibleGraphData.nodes.length} nodes
-                </div>
-             )}
-           </div>
-
-           {/* User Profile Mock */}
-           <div className="pointer-events-auto flex items-center gap-4">
-              <button className={`p-2 rounded-full shadow-lg backdrop-blur-sm border ${isDarkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-white/80 border-slate-200'}`} onClick={() => setTheme(prev => prev === AppTheme.CYBER ? AppTheme.DEFAULT : AppTheme.CYBER)}>
-                 {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+        <header className={`h-16 flex-shrink-0 border-b flex items-center justify-between px-6 ${isDarkMode ? 'border-slate-800 bg-slate-900/50' : 'border-slate-200 bg-white/50'}`}>
+           <form onSubmit={handleSearch} className="flex-1 max-w-2xl relative">
+              <Search className={`absolute left-4 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`} size={20} />
+              <input 
+                type="text" 
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={layoutMode === LayoutMode.SEED ? "What do you want to grow?" : "Search documentation, projects, or concepts..."}
+                className={`w-full pl-12 pr-4 py-2.5 rounded-xl outline-none transition-all border ${isDarkMode ? 'bg-slate-800 border-slate-700 focus:border-cyan-500 text-white placeholder-slate-500' : 'bg-slate-100 border-slate-200 focus:border-blue-500 text-slate-900 placeholder-slate-500'}`}
+              />
+           </form>
+           
+           <div className="flex items-center gap-4 ml-6">
+              <button onClick={() => setTheme(prev => prev === AppTheme.CYBER ? AppTheme.DEFAULT : AppTheme.CYBER)} className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-slate-800 text-slate-400' : 'hover:bg-slate-100 text-slate-500'}`}>
+                  {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
               </button>
-              <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-white shadow-lg">
-                <img src="https://picsum.photos/100/100" alt="User" className="w-full h-full object-cover" />
-              </div>
            </div>
-        </div>
+        </header>
 
-        {/* Content Area */}
-        <div className="w-full h-full pt-0">
-          {currentView === 'map' && (
-            <MindMap 
-              data={visibleGraphData} 
-              onNodeExpand={handleNodeExpandInteraction}
-              onNodeSelect={handleNodeSelect}
-              onUpdateNode={handleNodeUpdate}
-              onDeleteNode={handleDeleteNode}
-              theme={theme} 
-              linkStyle={linkStyle} 
-              layoutMode={layoutMode}
-              focusedNodeId={selectedNode?.id}
-            />
-          )}
+        {/* Workspace */}
+        <div className="flex-1 overflow-hidden relative">
+            {currentView === 'map' && (
+                <MindMap 
+                    data={visibleGraphData}
+                    onNodeExpand={handleNodeExpandInteraction}
+                    onNodeSelect={handleNodeSelect}
+                    onUpdateNode={handleNodeUpdate}
+                    onDeleteNode={handleDeleteNode}
+                    theme={theme}
+                    linkStyle={linkStyle}
+                    layoutMode={layoutMode}
+                    focusedNodeId={selectedNode?.id}
+                />
+            )}
+            
+            {currentView === 'stats' && (
+                <Stats documents={documents} darkMode={isDarkMode} />
+            )}
 
-          {currentView === 'stats' && (
-            <div className="w-full h-full pt-24 px-4 md:px-8 pb-8 overflow-auto">
-               <Stats documents={documents} darkMode={isDarkMode} />
-            </div>
-          )}
-
-          {currentView === 'projects' && (
-            <div className="w-full h-full pt-24 px-4 md:px-8 pb-8 overflow-auto">
-               <h2 className={`text-2xl font-bold mb-6 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>All Projects</h2>
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                 {/* Group Mock Docs by Project */}
-                 {Array.from(new Set(documents.map(d => d.project))).map(project => (
-                   <div key={project} className={`p-6 rounded-2xl border transition-all hover:shadow-lg group ${isDarkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-                      <div className="flex justify-between items-start mb-4">
-                         <div className={`p-3 rounded-xl ${isDarkMode ? 'bg-slate-700 text-white' : 'bg-blue-50 text-blue-600'}`}>
-                           <Folder size={24} />
-                         </div>
-                         <button className="opacity-0 group-hover:opacity-100 transition-opacity p-2 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-full">
-                           <Share2 size={16} />
-                         </button>
-                      </div>
-                      <h3 className={`text-lg font-bold mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{project}</h3>
-                      <p className={`text-sm mb-4 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                         {documents.filter(d => d.project === project).length} Files
-                      </p>
-                      <div className="flex -space-x-2">
-                         {[1,2,3].map(i => (
-                           <div key={i} className="w-8 h-8 rounded-full border-2 border-white dark:border-slate-800 bg-slate-200 overflow-hidden">
-                              <img src={`https://picsum.photos/50/50?random=${i}${project}`} className="w-full h-full object-cover" />
-                           </div>
-                         ))}
-                      </div>
-                   </div>
-                 ))}
-                 
-                 {/* New Project Button */}
-                 <button className={`p-6 rounded-2xl border border-dashed flex flex-col items-center justify-center gap-3 transition-colors ${isDarkMode ? 'border-slate-700 hover:bg-slate-800 text-slate-400' : 'border-slate-300 hover:bg-slate-50 text-slate-500'}`}>
-                    <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                       <Plus size={24} />
-                    </div>
-                    <span className="font-medium">Create Project</span>
-                 </button>
-               </div>
-            </div>
-          )}
-        </div>
-
-        {/* Settings Overlay */}
-        {showSettings && (
-          <div className="absolute inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center" onClick={() => setShowSettings(false)}>
-             <div className={`w-full max-w-md p-6 rounded-2xl shadow-2xl ${isDarkMode ? 'bg-slate-900 text-white' : 'bg-white text-slate-900'}`} onClick={e => e.stopPropagation()}>
-               <div className="flex justify-between items-center mb-6">
-                 <h3 className="text-xl font-bold">Settings</h3>
-                 <button onClick={() => setShowSettings(false)}><X size={24} /></button>
-               </div>
-               
-               <div className="space-y-6">
-                  {/* Theme Section */}
-                  <div className="space-y-3">
-                    <p className="font-bold opacity-70 flex items-center gap-2"><Settings size={16}/> Theme</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      {Object.values(AppTheme).map((t) => (
-                        <button 
-                          key={t}
-                          onClick={() => setTheme(t)}
-                          className={`p-4 rounded-xl border text-left transition-all ${theme === t ? `ring-2 ring-offset-2 ${themeConfig.accent.replace('bg-', 'ring-')} border-transparent` : 'border-slate-200 dark:border-slate-700'}`}
-                        >
-                          <div className="font-medium text-sm">{t}</div>
+            {currentView === 'projects' && (
+                 <div className="p-8 flex flex-col items-center justify-center h-full opacity-60">
+                     <FolderOpen size={64} className="mb-4" />
+                     <h2 className="text-xl font-bold">Projects View</h2>
+                     <p>Manage your document repositories here.</p>
+                 </div>
+            )}
+            
+            {/* Context Panel (Right Sidebar for selected node) */}
+            {selectedNode && (
+                <div className={`absolute top-4 right-4 w-80 max-h-[calc(100%-2rem)] rounded-2xl shadow-2xl border flex flex-col overflow-hidden backdrop-blur-md transition-all ${isDarkMode ? 'bg-slate-900/90 border-slate-700 text-slate-200' : 'bg-white/90 border-slate-200 text-slate-800'}`}>
+                    <div className={`p-4 border-b flex items-center justify-between ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
+                        <div className="flex items-center gap-2 font-bold">
+                           {selectedNode.type === NodeType.PROJECT ? <Folder size={18} className="text-blue-500" /> : <FileText size={18} className="text-emerald-500" />}
+                           <span className="truncate max-w-[180px]">{selectedNode.name}</span>
+                        </div>
+                        <button onClick={() => setSelectedNode(null)} className="p-1 hover:bg-black/10 rounded-full">
+                            <X size={16} />
                         </button>
-                      ))}
                     </div>
-                  </div>
-
-                  {/* Link Style Section */}
-                  <div className="space-y-3">
-                    <p className="font-bold opacity-70 flex items-center gap-2"><Network size={16}/> Link Design</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button 
-                        onClick={() => setLinkStyle(LinkStyle.STRAIGHT)}
-                        className={`p-4 rounded-xl border flex items-center gap-2 transition-all ${linkStyle === LinkStyle.STRAIGHT ? `ring-2 ring-offset-2 ${themeConfig.accent.replace('bg-', 'ring-')} border-transparent bg-slate-100 dark:bg-slate-800` : 'border-slate-200 dark:border-slate-700'}`}
-                      >
-                         <Minus size={18} className="rotate-45" />
-                         <span className="font-medium text-sm">Straight</span>
-                      </button>
-                      
-                      <button 
-                        onClick={() => setLinkStyle(LinkStyle.ROOT)}
-                        className={`p-4 rounded-xl border flex items-center gap-2 transition-all ${linkStyle === LinkStyle.ROOT ? `ring-2 ring-offset-2 ${themeConfig.accent.replace('bg-', 'ring-')} border-transparent bg-slate-100 dark:bg-slate-800` : 'border-slate-200 dark:border-slate-700'}`}
-                      >
-                         <Sprout size={18} className="text-green-500" />
-                         <span className="font-medium text-sm">Root + Leaf</span>
-                      </button>
-                    </div>
-                  </div>
-               </div>
-             </div>
-          </div>
-        )}
-
-      </main>
-
-      {/* Right Details Panel (Slide over) */}
-      <div className={`absolute top-0 right-0 h-full w-full md:w-96 shadow-2xl transform transition-transform duration-300 z-30 flex flex-col ${selectedNode ? 'translate-x-0' : 'translate-x-full'} ${isDarkMode ? 'bg-slate-900 border-l border-slate-800' : 'bg-white border-l border-slate-200'}`}>
-         {selectedNode && (
-           <>
-             <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-start">
-               <div className="w-full pr-4">
-                 <div className="flex items-center justify-between mb-2">
-                     <div className="flex items-center gap-2">
-                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase ${
-                            selectedNode.type === NodeType.PROJECT ? 'bg-amber-100 text-amber-700' : 
-                            selectedNode.type === NodeType.CATEGORY ? 'bg-violet-100 text-violet-700' : 
-                            'bg-blue-100 text-blue-700'
-                        }`}>
-                            {selectedNode.type}
-                        </span>
-                        {/* Blossom Toggle */}
-                         <button 
-                            onClick={() => toggleNodeBlossom(selectedNode)}
-                            className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded transition-colors ${selectedNode.collapsed ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}
-                            title={selectedNode.collapsed ? "Expand Children" : "Collapse Children"}
-                         >
-                             {selectedNode.collapsed ? <><EyeOff size={10} /> Bud</> : <><Eye size={10} /> Blossom</>}
-                         </button>
-
-                         {/* Fold Parent Button */}
-                         {selectedNode.id !== 'root' && (
-                             <button 
-                                onClick={handleFoldParent}
-                                className={`flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded transition-colors ${isDarkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
-                                title="Fold Parent (Collapse parent node)"
-                             >
-                                 <ArrowUp size={10} /> Fold Parent
-                             </button>
-                         )}
-                     </div>
-                 </div>
-                 <input 
-                    type="text" 
-                    value={selectedNode.name} 
-                    onChange={(e) => handleNodeUpdate(selectedNode.id, { name: e.target.value })}
-                    className={`text-xl font-bold leading-tight bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none w-full pb-1 transition-colors ${isDarkMode ? 'text-white' : 'text-slate-900'}`}
-                    placeholder="Node Name"
-                 />
-                 
-                 <div className="mt-4 flex items-center gap-2 group w-full">
-                    <MapPin size={14} className="text-slate-400 group-hover:text-blue-500 transition-colors flex-shrink-0" />
-                    <input 
-                        type="text" 
-                        value={selectedNode.project || 'Unassigned'} 
-                        onChange={(e) => handleNodeUpdate(selectedNode.id, { project: e.target.value })}
-                        className={`text-sm font-medium bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none w-full pb-0.5 transition-colors ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}
-                        placeholder="File Directory / Location"
-                    />
-                     <button 
-                        onClick={() => alert(`Simulating opening local folder: ${selectedNode.project || 'Default'}`)}
-                        className="p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-blue-500 transition-colors ml-1"
-                        title="Open Local Folder"
-                    >
-                        <FolderOpen size={14} />
-                    </button>
-                 </div>
-               </div>
-               <button onClick={() => setSelectedNode(null)} className="p-2 flex-shrink-0 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
-                 <X size={20} />
-               </button>
-             </div>
-             
-             {/* Tabs for File filtering */}
-             <div className="px-6 mt-4">
-                 <div className={`flex items-center gap-1 p-1 rounded-lg ${isDarkMode ? 'bg-slate-800' : 'bg-slate-100'} overflow-x-auto`}>
-                     {(['all', 'video', 'photo', 'audio', 'doc', 'data'] as const).map(tab => (
-                         <button
-                            key={tab}
-                            onClick={() => setSidebarTab(tab)}
-                            className={`flex-1 min-w-[50px] py-1.5 text-[10px] font-bold uppercase tracking-wide rounded-md transition-all ${sidebarTab === tab ? (isDarkMode ? 'bg-slate-700 text-white shadow' : 'bg-white text-blue-600 shadow') : 'text-slate-400 hover:text-slate-600'}`}
-                         >
-                             {tab === 'all' && 'All'}
-                             {tab === 'video' && 'Vid'}
-                             {tab === 'photo' && 'Pic'}
-                             {tab === 'audio' && 'Aud'}
-                             {tab === 'doc' && 'Doc'}
-                             {tab === 'data' && 'Data'}
-                         </button>
-                     ))}
-                 </div>
-             </div>
-
-             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                
-                {/* File Repository Manager */}
-                <div className={`p-4 rounded-xl border border-dashed transition-all ${isDarkMode ? 'border-slate-700 bg-slate-800/20' : 'border-slate-300 bg-slate-50'}`}>
-                    <h5 className="text-xs font-bold uppercase text-slate-400 mb-3 text-center">Repository Manager</h5>
                     
-                    <div className="flex gap-2">
-                        {/* Single File Upload */}
-                        <div className="flex-1">
-                             <input 
-                                type="file" 
-                                ref={fileInputRef}
-                                className="hidden" 
-                                onChange={(e) => handleFileUploadToNode(e, selectedNode)} 
-                             />
-                             <button 
-                                onClick={() => fileInputRef.current?.click()}
-                                className={`w-full h-20 rounded-lg flex flex-col items-center justify-center gap-1 transition-colors ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700 border-slate-700' : 'bg-white hover:bg-slate-100 border-slate-200'} border`}
-                             >
-                                 <FilePlus size={20} className="text-blue-500" />
-                                 <span className="text-[10px] font-bold uppercase opacity-70">Add File</span>
+                    <div className="p-4 flex-1 overflow-y-auto space-y-4">
+                        <div>
+                            <label className="text-xs font-bold uppercase tracking-wider opacity-50 mb-1 block">Description</label>
+                            <p className="text-sm leading-relaxed opacity-90">{selectedDocSummary || selectedNode.description}</p>
+                        </div>
+                        
+                        {/* Actions */}
+                        <div className="grid grid-cols-2 gap-2">
+                             <button onClick={() => handleNodeExpandInteraction(selectedNode)} className={`p-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 border ${isDarkMode ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-200 hover:bg-slate-50'}`}>
+                                 {selectedNode.collapsed ? <><Eye size={14} /> Expand</> : <><Plus size={14} /> Add Child</>}
+                             </button>
+                             <button onClick={() => handleDeleteNode(selectedNode.id)} className={`p-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 border border-red-500/20 text-red-500 hover:bg-red-500/10`}>
+                                 <Trash2 size={14} /> Delete
                              </button>
                         </div>
 
-                         {/* Folder Upload */}
-                         <div className="flex-1">
-                             <input 
-                                type="file" 
-                                ref={folderInputRef}
-                                className="hidden"
-                                // @ts-ignore - webkitdirectory is non-standard but supported in most browsers
-                                webkitdirectory=""
-                                directory=""
-                                onChange={(e) => handleFileUploadToNode(e, selectedNode)} 
-                             />
-                             <button 
-                                onClick={() => folderInputRef.current?.click()}
-                                className={`w-full h-20 rounded-lg flex flex-col items-center justify-center gap-1 transition-colors ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700 border-slate-700' : 'bg-white hover:bg-slate-100 border-slate-200'} border`}
-                             >
-                                 <FolderPlus size={20} className="text-amber-500" />
-                                 <span className="text-[10px] font-bold uppercase opacity-70">Add Folder</span>
-                             </button>
-                        </div>
-                    </div>
-                    <p className="text-[10px] text-center opacity-40 mt-2">Uploading folders groups files by type.</p>
-                </div>
-
-                {/* List of Children (Branches) */}
-                <div>
-                   <h4 className="text-xs font-bold uppercase text-slate-400 mb-3 flex items-center justify-between">
-                       <span>Branches ({filteredChildren.length})</span>
-                   </h4>
-                   <div className="space-y-2">
-                       {filteredChildren.length === 0 ? (
-                           <p className="text-sm opacity-40 italic">No sub-branches.</p>
-                       ) : (
-                           filteredChildren.map(child => (
-                               <div key={child.id} onClick={() => handleNodeSelect(child)} className={`p-3 rounded-lg flex items-center gap-3 cursor-pointer transition-all ${isDarkMode ? 'bg-slate-800 hover:bg-slate-700' : 'bg-slate-50 hover:bg-slate-100'}`}>
-                                   <div className={`w-8 h-8 rounded-md flex items-center justify-center text-white ${
-                                       child.iconType === 'video' ? 'bg-violet-500' : 
-                                       child.iconType === 'image' ? 'bg-sky-500' : 
-                                       child.iconType === 'folder' ? 'bg-amber-500' :
-                                       child.iconType === 'music' ? 'bg-pink-500' :
-                                       child.iconType === 'spreadsheet' ? 'bg-green-600' :
-                                       'bg-emerald-500'
-                                   }`}>
-                                       {child.iconType === 'video' ? <Video size={14} /> :
-                                        child.iconType === 'image' ? <ImageIcon size={14} /> :
-                                        child.iconType === 'folder' ? <Folder size={14} /> :
-                                        child.iconType === 'music' ? <Music size={14} /> :
-                                        child.iconType === 'spreadsheet' ? <Table size={14} /> :
-                                        <FileText size={14} />}
-                                   </div>
-                                   <div className="flex-1 min-w-0">
-                                       <div className="text-sm font-medium truncate">{child.name}</div>
-                                       <div className="text-xs opacity-50">{child.type}</div>
-                                   </div>
-                                   <ChevronRight size={14} className="opacity-30" />
-                               </div>
-                           ))
-                       )}
-                   </div>
-                </div>
-
-                {/* List of Attached Documents (Leaf Files) */}
-                {(attachedDocs.length > 0) && (
-                  <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                     <h4 className="text-xs font-bold uppercase text-slate-400 mb-3 flex items-center justify-between">
-                         <span>Files ({attachedDocs.length})</span>
-                     </h4>
-                     <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar pr-1">
-                         {attachedDocs.map(doc => {
-                             const isAlreadyInGraph = masterGraphData.nodes.some(n => n.id === doc.id);
-                             return (
-                             <div key={doc.id} className={`group p-3 rounded-lg flex items-center gap-3 transition-all ${isDarkMode ? 'bg-slate-800/50' : 'bg-white border border-slate-100'}`}>
-                                 <div className={`w-8 h-8 rounded-md flex items-center justify-center ${isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-500'}`}>
-                                     <FileText size={14} />
-                                 </div>
-                                 <div className="flex-1 min-w-0">
-                                     <div className="text-sm font-medium truncate">{doc.title}</div>
-                                     <div className="text-[10px] opacity-50 uppercase">{doc.type}</div>
-                                 </div>
-                                 
-                                 {/* Add to Map Button */}
-                                 {!isAlreadyInGraph ? (
-                                     <button 
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleAddDocToGraph(doc);
-                                        }}
-                                        className={`p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-all ${isDarkMode ? 'hover:bg-slate-600 text-cyan-400' : 'hover:bg-slate-200 text-blue-600'}`}
-                                        title="Add to Mind Map"
-                                     >
-                                        <Network size={16} />
-                                     </button>
-                                 ) : (
-                                     <span className="text-[10px] opacity-50 text-green-500 font-medium">Mapped</span>
-                                 )}
+                         {/* Attachments Section */}
+                        {selectedNode.type === NodeType.CATEGORY || selectedNode.type === NodeType.PROJECT ? (
+                             <div>
+                                <label className="text-xs font-bold uppercase tracking-wider opacity-50 mb-2 block flex items-center justify-between">
+                                    Files
+                                    <span className="text-[10px] bg-slate-500/20 px-1.5 py-0.5 rounded">{attachedDocs.length}</span>
+                                </label>
+                                <div className="space-y-2">
+                                    {attachedDocs.length > 0 ? attachedDocs.map(doc => (
+                                        <div key={doc.id} className={`flex items-center gap-2 p-2 rounded-lg text-sm border ${isDarkMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                                            {doc.type === 'mp4' ? <Video size={14} className="text-purple-500" /> : 
+                                             doc.type === 'jpg' ? <ImageIcon size={14} className="text-sky-500" /> :
+                                             <FileText size={14} className="text-slate-500" />}
+                                            <span className="truncate flex-1">{doc.title}</span>
+                                        </div>
+                                    )) : (
+                                        <div className="text-xs opacity-50 text-center py-4 border border-dashed rounded-lg">No files attached</div>
+                                    )}
+                                    
+                                    {/* Upload Trigger */}
+                                    <label className={`flex items-center justify-center gap-2 p-2 rounded-lg border border-dashed cursor-pointer text-xs font-bold transition-colors ${isDarkMode ? 'border-slate-700 hover:bg-slate-800 text-slate-400' : 'border-slate-300 hover:bg-slate-50 text-slate-500'}`}>
+                                         <input type="file" multiple className="hidden" onChange={(e) => handleFileUploadToNode(e, selectedNode)} />
+                                         <Upload size={14} /> Upload Files
+                                    </label>
+                                </div>
                              </div>
-                         )})}
-                     </div>
-                  </div>
-                )}
-
-                {selectedNode.type === NodeType.DOCUMENT && (
-                  <>
-                    <div className="border-t border-slate-100 dark:border-slate-800 pt-6 mt-4">
-                      <h4 className="text-xs font-bold uppercase text-slate-400 mb-2">Metadata</h4>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-slate-800' : 'bg-slate-50'}`}>
-                           <span className="block text-xs opacity-50 mb-1">Type</span>
-                           <span className="font-medium text-sm flex items-center gap-2">
-                             <FileText size={14} /> {documents.find(d => d.id === selectedNode.id)?.type || 'Unknown'}
-                           </span>
+                        ) : null}
+                    </div>
+                </div>
+            )}
+            
+            {/* Settings Modal Overlay */}
+            {showSettings && (
+                <div className="absolute inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className={`w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
+                        <div className="p-4 border-b flex items-center justify-between">
+                            <h3 className="font-bold text-lg">Settings</h3>
+                            <button onClick={() => setShowSettings(false)}><X size={20} /></button>
                         </div>
-                         <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-slate-800' : 'bg-slate-50'}`}>
-                           <span className="block text-xs opacity-50 mb-1">Date</span>
-                           <span className="font-medium text-sm">
-                             {documents.find(d => d.id === selectedNode.id)?.date || 'N/A'}
-                           </span>
+                        <div className="p-6 space-y-6">
+                            <div>
+                                <label className="block text-sm font-medium mb-3 opacity-80">Layout Mode</label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button 
+                                        onClick={() => setLayoutMode(LayoutMode.SPIDER)}
+                                        className={`p-3 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${layoutMode === LayoutMode.SPIDER ? 'border-blue-500 bg-blue-500/10' : 'border-transparent bg-slate-100 dark:bg-slate-800'}`}
+                                    >
+                                        <Network />
+                                        <span className="text-sm font-bold">Spider</span>
+                                    </button>
+                                    <button 
+                                        onClick={() => setLayoutMode(LayoutMode.SEED)}
+                                        className={`p-3 rounded-xl border-2 flex flex-col items-center gap-2 transition-all ${layoutMode === LayoutMode.SEED ? 'border-green-500 bg-green-500/10' : 'border-transparent bg-slate-100 dark:bg-slate-800'}`}
+                                    >
+                                        <Sprout />
+                                        <span className="text-sm font-bold">Seed/Tree</span>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-medium mb-3 opacity-80">Link Style</label>
+                                <div className="flex gap-2">
+                                     <button onClick={() => setLinkStyle(LinkStyle.ROOT)} className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium ${linkStyle === LinkStyle.ROOT ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}>Organic</button>
+                                     <button onClick={() => setLinkStyle(LinkStyle.STRAIGHT)} className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium ${linkStyle === LinkStyle.STRAIGHT ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}>Straight</button>
+                                </div>
+                            </div>
                         </div>
-                      </div>
                     </div>
-
-                    <div className="mt-4">
-                      <h4 className="text-xs font-bold uppercase text-slate-400 mb-2">Summary</h4>
-                      <p className={`text-sm leading-relaxed ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-                         {selectedDocSummary || "Analysis pending..."}
-                      </p>
-                    </div>
-
-                    <div className="pt-4">
-                      <button className={`w-full py-3 px-4 rounded-xl flex items-center justify-center gap-2 font-medium transition-colors ${themeConfig.accent} text-white hover:opacity-90 shadow-lg`}>
-                        Open Document
-                      </button>
-                      <button className={`w-full mt-3 py-3 px-4 rounded-xl flex items-center justify-center gap-2 font-medium transition-colors border ${isDarkMode ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-200 hover:bg-slate-50'}`}>
-                        <Share2 size={18} /> Share
-                      </button>
-                    </div>
-                  </>
-                )}
-             </div>
-           </>
-         )}
-      </div>
-
+                </div>
+            )}
+        </div>
+      </main>
     </div>
   );
 }
