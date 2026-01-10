@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as d3 from 'd3';
-import { Circle, FileText, Folder, Image, Video, Flower2, Music, Table, Trash2, Eye, EyeOff, ArrowUp, Sun, Moon, Play, Pause, CloudSun, Sunset } from 'lucide-react';
+import { Circle, FileText, Folder, Image, Video, Flower2, Music, Table, Trash2, Eye, EyeOff, ArrowUp, Sun, Moon, Play, Pause, CloudSun, Sunset, Sparkles } from 'lucide-react';
 import { GraphData, Node, Link, NodeType, AppTheme, LinkStyle, NodeIconType, LayoutMode } from '../types';
 import { THEMES } from '../constants';
 
@@ -31,6 +31,56 @@ interface BackgroundTree {
   x: number;
   scale: number;
   seed: number;
+}
+
+interface Star {
+  id: string;
+  x: number;
+  y: number;
+  r: number;
+  baseAlpha: number;
+  twinklePhase: number;
+}
+
+interface GrassBlade {
+  id: string;
+  xOffset: number; // Relative to tree center
+  h: number;
+  w: number;
+  color: string;
+  angle: number;
+  stiffness: number;
+}
+
+interface Rock {
+  id: string;
+  xOffset: number; // Relative to tree center
+  yOffset: number;
+  rx: number;
+  ry: number;
+  color: string;
+  rotation: number;
+}
+
+interface Log {
+  id: string;
+  xOffset: number;
+  yOffset: number;
+  width: number;
+  height: number;
+  rotation: number;
+  color: string;
+}
+
+interface Particle {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  r: number;
+  phase: number;
+  type: 'pollen' | 'firefly';
 }
 
 // Icon Paths (ViewBox 0 0 24 24)
@@ -167,16 +217,22 @@ const MindMap: React.FC<MindMapProps> = ({
   const [isPaused, setIsPaused] = useState(false);
   const timeRef = useRef(0.4);
   const animationFrameRef = useRef<number>(0);
+  const rootPosRef = useRef<{x: number, y: number} | null>(null);
   
-  // Clouds & Background Trees
+  // Refs for Environmental Elements
   const cloudsRef = useRef<Cloud[]>([]);
   const bgTreesRef = useRef<BackgroundTree[]>([]);
+  const starsRef = useRef<Star[]>([]);
+  const grassRef = useRef<GrassBlade[]>([]);
+  const rocksRef = useRef<Rock[]>([]);
+  const logsRef = useRef<Log[]>([]);
+  const particlesRef = useRef<Particle[]>([]);
 
   const nodesMapRef = useRef<Map<string, Node>>(new Map());
   const simulationRef = useRef<d3.Simulation<Node, Link> | null>(null);
   const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
 
-  // Initialize clouds & trees
+  // Initialize Environment
   useEffect(() => {
     const rng = makeRng(888);
     
@@ -210,21 +266,115 @@ const MindMap: React.FC<MindMapProps> = ({
     if (bgTreesRef.current.length === 0) {
         const treeRng = makeRng(1234);
         const bgTrees: BackgroundTree[] = [];
-        // Left side forest
-        for(let i=0; i<6; i++) {
-             const x = -500 - (treeRng() * 1800);
-             bgTrees.push({ id: `bg-tree-l-${i}`, x, scale: 0.5 + treeRng()*0.6, seed: treeRng()*100 });
+        for(let i=0; i<6; i++) { // Left
+             bgTrees.push({ id: `bg-tree-l-${i}`, x: -500 - (treeRng() * 1800), scale: 0.5 + treeRng()*0.6, seed: treeRng()*100 });
         }
-        // Right side forest
-        for(let i=0; i<6; i++) {
-             const x = 500 + (treeRng() * 1800);
-             bgTrees.push({ id: `bg-tree-r-${i}`, x, scale: 0.5 + treeRng()*0.6, seed: treeRng()*100 });
+        for(let i=0; i<6; i++) { // Right
+             bgTrees.push({ id: `bg-tree-r-${i}`, x: 500 + (treeRng() * 1800), scale: 0.5 + treeRng()*0.6, seed: treeRng()*100 });
         }
         bgTreesRef.current = bgTrees;
     }
+
+    // Stars
+    if (starsRef.current.length === 0) {
+        const starRng = makeRng(777);
+        const stars: Star[] = [];
+        for(let i=0; i<200; i++) {
+            stars.push({
+                id: `star-${i}`,
+                x: (starRng() - 0.5) * 4000,
+                y: (starRng() * 1200) - 1500,
+                r: 0.5 + starRng() * 1.8,
+                baseAlpha: 0.2 + starRng() * 0.8,
+                twinklePhase: starRng() * Math.PI * 2
+            });
+        }
+        starsRef.current = stars;
+    }
+
+    // Grass
+    if (grassRef.current.length === 0) {
+        const grassRng = makeRng(555);
+        const blades: GrassBlade[] = [];
+        
+        // Spread grass across a much wider area (Whole Map effect)
+        const GRASS_WIDTH = 5000;
+        const BLADE_COUNT = 2500; // Increased density
+
+        for(let i=0; i<BLADE_COUNT; i++) {
+             // Uniform distribution instead of Normal to cover the whole width equally
+             const xOffset = (grassRng() - 0.5) * GRASS_WIDTH; 
+
+             blades.push({
+                 id: `grass-${i}`,
+                 xOffset,
+                 h: 15 + grassRng() * 25,
+                 w: 2 + grassRng() * 4,
+                 angle: (grassRng() - 0.5) * 0.3,
+                 color: interpolateColor("#3f6212", "#65a30d", grassRng()),
+                 stiffness: 0.05 + grassRng() * 0.1
+             });
+        }
+        grassRef.current = blades.sort((a,b) => Math.abs(b.xOffset) - Math.abs(a.xOffset)); 
+    }
+
+    // Rocks
+    if (rocksRef.current.length === 0) {
+        const rockRng = makeRng(666);
+        const rocks: Rock[] = [];
+        for(let i=0; i<7; i++) {
+            rocks.push({
+                id: `rock-${i}`,
+                xOffset: (rockRng() - 0.5) * 220,
+                yOffset: -5 + (rockRng() * 10), // Embedded in ground
+                rx: 15 + rockRng() * 20,
+                ry: 8 + rockRng() * 12,
+                rotation: (rockRng() - 0.5) * 0.4,
+                color: interpolateColor("#44403c", "#292524", rockRng())
+            });
+        }
+        rocksRef.current = rocks;
+    }
+
+    // Logs
+    if (logsRef.current.length === 0) {
+        const logRng = makeRng(444);
+        const logs: Log[] = [];
+        for(let i=0; i<4; i++) {
+            logs.push({
+                id: `log-${i}`,
+                xOffset: (logRng() - 0.5) * 350,
+                yOffset: -15 + (logRng() * 15), 
+                width: 40 + logRng() * 40,
+                height: 8 + logRng() * 6,
+                rotation: (logRng() - 0.5) * 0.8, // Radian approx
+                color: "#3E2723"
+            });
+        }
+        logsRef.current = logs;
+    }
+
+    // Particles
+    if (particlesRef.current.length === 0) {
+         const pRng = makeRng(999);
+         const parts: Particle[] = [];
+         for(let i=0; i<50; i++) {
+             parts.push({
+                 id: `p-${i}`,
+                 x: (pRng() - 0.5) * 2000,
+                 y: (pRng() * 1000) - 500,
+                 vx: (pRng() - 0.5) * 0.3,
+                 vy: (pRng() - 0.5) * 0.3,
+                 r: 1 + pRng() * 2.5,
+                 phase: pRng() * Math.PI * 2,
+                 type: pRng() > 0.5 ? 'firefly' : 'pollen'
+             });
+         }
+         particlesRef.current = parts;
+    }
   }, []);
   
-  // Animation loop for Day/Night and Wind
+  // Animation loop for Day/Night and Environment
   useEffect(() => {
     if (layoutMode !== LayoutMode.SEED) return;
     
@@ -242,14 +392,88 @@ const MindMap: React.FC<MindMapProps> = ({
             setTimeOfDay(timeRef.current);
         }
         
-        // Update clouds independent of pause (wind still blows)
+        const t = timeRef.current;
+        const isNight = t > 0.75 || t < 0.25; // Darker times
+        const wind = Math.sin(now * 0.001);
+
+        // Update Clouds
         if (cloudsRef.current) {
             cloudsRef.current.forEach(c => {
                 c.x += c.speed;
                 if (c.x > 3000) c.x = -3000; 
             });
         }
+
+        // Update Particles
+        if (particlesRef.current) {
+            particlesRef.current.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                if (p.y > 600) p.y = -600;
+                if (p.y < -600) p.y = 600;
+                if (p.x > 1500) p.x = -1500;
+                if (p.x < -1500) p.x = 1500;
+            });
+            
+            // Direct DOM update for particles for smooth 60fps
+            d3.selectAll(".env-particle")
+                .attr("cx", (d: any) => d.x + Math.sin(now * 0.002 + d.phase) * 20)
+                .attr("cy", (d: any) => d.y + Math.cos(now * 0.003 + d.phase) * 10)
+                .attr("opacity", (d: any) => {
+                    if (d.type === 'firefly') {
+                         // Fireflies only visible at night/dusk
+                         const nightFactor = (t > 0.7 || t < 0.3) ? 1 : 0;
+                         return nightFactor * (0.5 + Math.sin(now * 0.005 + d.phase) * 0.5);
+                    } else {
+                         // Pollen visible during day
+                         const dayFactor = (t >= 0.3 && t <= 0.7) ? 1 : 0.2;
+                         return dayFactor * 0.4;
+                    }
+                });
+        }
+
+        // Update Grass Sway (DOM update)
+        if (grassRef.current && rootPosRef.current && svgRef.current) {
+            const rootX = rootPosRef.current.x;
+            const groundY = rootPosRef.current.y;
+            
+            // Build path string for all blades
+            let grassPath = "";
+            grassRef.current.forEach(g => {
+                const sway = Math.sin(now * 0.002 + g.xOffset * 0.05) * (g.h * 0.3);
+                const startX = rootX + g.xOffset;
+                const startY = groundY;
+                const endX = startX + sway + (g.angle * 20);
+                const endY = startY - g.h;
+                const cpX = startX + (sway * 0.5);
+                const cpY = startY - (g.h * 0.5);
+                
+                // Simple quadratic curve for blade
+                // Draw as a filled shape (triangle-ish)
+                const w = g.w;
+                grassPath += `M${startX - w/2},${startY} Q${cpX},${cpY} ${endX},${endY} Q${cpX},${cpY} ${startX + w/2},${startY} Z `;
+            });
+            
+            d3.select(svgRef.current).select(".grass-layer-path").attr("d", grassPath);
+        }
+
+        // Update Stars
+        const brightness = (t > 0.25 && t < 0.75) ? 1 : 0; // 1 = Day, 0 = Night
+        const starVis = Math.max(0, 1 - (brightness * 1.5)); // 0 during day, 1 at night
+        if (starVis > 0) {
+            d3.selectAll(".star-circle")
+              .attr("opacity", (d: any) => d.baseAlpha * starVis * (0.7 + Math.sin(now * 0.003 + d.twinklePhase) * 0.3));
+        } else {
+            d3.selectAll(".star-circle").attr("opacity", 0);
+        }
         
+        // Update Hint Bobbing
+        const hintContent = d3.select(svgRef.current).select(".hint-content");
+        if (!hintContent.empty()) {
+            const bob = Math.sin(now * 0.005) * 8;
+            hintContent.attr("transform", `translate(0, ${bob})`);
+        }
+
         animationFrameRef.current = requestAnimationFrame(animate);
     };
     
@@ -465,8 +689,13 @@ const MindMap: React.FC<MindMapProps> = ({
         const cloudNoise = defs.append("filter").attr("id", "cloudNoise").attr("x", "0%").attr("y", "0%").attr("width", "100%").attr("height", "100%");
         cloudNoise.append("feTurbulence").attr("type", "fractalNoise").attr("baseFrequency", "0.01").attr("numOctaves", "5").attr("seed", "123").attr("result", "noise");
         cloudNoise.append("feColorMatrix").attr("type", "matrix").attr("values", "1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.3 0").attr("in", "noise").attr("result", "softNoise");
+        
+        // 5. Ground Dirt Texture
+        const groundNoise = defs.append("filter").attr("id", "groundTexture").attr("x", "0%").attr("y", "0%").attr("width", "100%").attr("height", "100%");
+        groundNoise.append("feTurbulence").attr("type", "fractalNoise").attr("baseFrequency", "0.8").attr("numOctaves", "4").attr("result", "noise");
+        groundNoise.append("feColorMatrix").attr("type", "matrix").attr("values", "1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.15 0").attr("in", "noise").attr("result", "dirt");
 
-        // 5. Fluffy Cloud Filter (Soft edges)
+        // 6. Fluffy Cloud Filter (Soft edges)
         const fluffyFilter = defs.append("filter").attr("id", "fluffyCloud");
         fluffyFilter.append("feGaussianBlur").attr("stdDeviation", "8").attr("in", "SourceGraphic");
 
@@ -481,6 +710,13 @@ const MindMap: React.FC<MindMapProps> = ({
             sg.append("stop").attr("offset", "0%").attr("stop-color", "white").attr("stop-opacity", 0.6);
             sg.append("stop").attr("offset", "100%").attr("stop-color", "white").attr("stop-opacity", 0);
         }
+        
+        // Sun Spot (Ground Highlight)
+        if (defs.select("#sunSpot").empty()) {
+            const ss = defs.append("radialGradient").attr("id", "sunSpot").attr("cx", "50%").attr("cy", "50%").attr("r", "50%");
+            ss.append("stop").attr("offset", "0%").attr("stop-color", "#fcd34d").attr("stop-opacity", 0.4); // Golden center
+            ss.append("stop").attr("offset", "100%").attr("stop-color", "transparent").attr("stop-opacity", 0);
+        }
 
         if (defs.select("#trunk3D").empty()) {
             const tGrad = defs.append("linearGradient").attr("id", "trunk3D").attr("x1", "0%").attr("y1", "0%").attr("x2", "100%").attr("y2", "0%");
@@ -493,6 +729,20 @@ const MindMap: React.FC<MindMapProps> = ({
              gr.append("stop").attr("offset", "0%").attr("stop-color", "white").attr("stop-opacity", 0.3);
              gr.append("stop").attr("offset", "100%").attr("stop-color", "transparent").attr("stop-opacity", 0);
         }
+        
+        // Ground Gradient
+        if (defs.select("#groundGradient").empty()) {
+             const gg = defs.append("linearGradient").attr("id", "groundGradient").attr("x1", "0%").attr("y1", "0%").attr("x2", "0%").attr("y2", "100%");
+             gg.append("stop").attr("offset", "0%").attr("stop-color", "#1a2e05"); // Horizon dark green
+             gg.append("stop").attr("offset", "100%").attr("stop-color", "#0f1a03"); // Foreground very dark
+        }
+        
+        // Road Gradient
+        if (defs.select("#roadGradient").empty()) {
+             const rg = defs.append("linearGradient").attr("id", "roadGradient").attr("x1", "0%").attr("y1", "0%").attr("x2", "0%").attr("y2", "100%");
+             rg.append("stop").attr("offset", "0%").attr("stop-color", "#78350f"); // Darker dirt at horizon
+             rg.append("stop").attr("offset", "100%").attr("stop-color", "#92400e"); // Lighter near cam
+        }
     }
     
     // Update Dynamic Sky Gradient (3 Stops for Horizon Shader)
@@ -501,6 +751,9 @@ const MindMap: React.FC<MindMapProps> = ({
     skyGrad.append("stop").attr("offset", "0%").attr("stop-color", sunData.skyTop);
     skyGrad.append("stop").attr("offset", "50%").attr("stop-color", sunData.skyMiddle);
     skyGrad.append("stop").attr("offset", "100%").attr("stop-color", sunData.skyBottom);
+    
+    // Update lighting color
+    defs.select("#cylinderLight feSpecularLighting").attr("lighting-color", sunData.lightColor);
 
     // --- 1. SETUP LAYERS ---
     let g = svg.select<SVGGElement>(".mindmap-group");
@@ -527,6 +780,9 @@ const MindMap: React.FC<MindMapProps> = ({
         // Atmospheric noise overlay for realism
         bgLayer.append("rect").attr("class", "sky-noise").attr("width", 200000).attr("x", -100000).attr("y", -100000).attr("height", 200000).attr("filter", "url(#cloudNoise)").attr("opacity", 0.15);
         
+        // Stars Group
+        bgLayer.append("g").attr("class", "stars-group");
+
         // Celestial Body (Sun/Moon)
         bgLayer.append("circle").attr("class", "celestial-body").attr("r", 40);
 
@@ -540,7 +796,17 @@ const MindMap: React.FC<MindMapProps> = ({
         bgLayer.append("circle").attr("class", "god-rays").attr("r", 800).attr("fill", "url(#godRays)").style("mix-blend-mode", "overlay");
 
         bgLayer.append("g").attr("class", "landscape-layer");
-        bgLayer.append("rect").attr("class", "ground-rect").attr("width", 200000).attr("x", -100000).attr("fill", "#1a2e05"); 
+        
+        // Ground with gradient and texture
+        const ground = bgLayer.append("g").attr("class", "ground-group");
+        ground.append("rect").attr("class", "ground-rect").attr("width", 200000).attr("x", -100000).attr("fill", "url(#groundGradient)"); 
+        ground.append("rect").attr("class", "ground-texture").attr("width", 200000).attr("x", -100000).attr("filter", "url(#groundTexture)").attr("opacity", 0.2);
+        
+        // Dirt Road (Added)
+        ground.append("path").attr("class", "dirt-road").attr("fill", "url(#roadGradient)").attr("opacity", 0.8).attr("filter", "url(#groundTexture)");
+        
+        // Sun Highlight on Grass (Added)
+        ground.append("ellipse").attr("class", "grass-highlight").attr("rx", 600).attr("ry", 100).attr("fill", "url(#sunSpot)").style("mix-blend-mode", "overlay");
     }
     
     // Background Trees Layer (After landscape, before main tree)
@@ -571,7 +837,26 @@ const MindMap: React.FC<MindMapProps> = ({
             .attr("cx", sunData.cx)
             .attr("cy", sunData.cy)
             .attr("opacity", sunData.isSun ? 0.6 : 0.1);
-            
+        
+        // Update Grass Highlight
+        bgLayer.select(".grass-highlight")
+            .attr("cx", width / 2) // Centered on scene
+            .attr("cy", 200) // Relative to ground group
+            .attr("opacity", sunData.isSun ? 0.6 : 0.1);
+
+        // --- RENDER STARS ---
+        const starsGroup = bgLayer.select(".stars-group");
+        const starSel = starsGroup.selectAll<SVGCircleElement, Star>(".star-circle")
+            .data(starsRef.current);
+        
+        starSel.enter().append("circle")
+            .attr("class", "star-circle")
+            .attr("cx", d => d.x)
+            .attr("cy", d => d.y)
+            .attr("r", d => d.r)
+            .attr("fill", "#ffffff")
+            .attr("opacity", 0); // Init hidden, animate handles opacity
+
         // --- RENDER CLOUDS ---
         const cloudsLayer = bgLayer.select(".clouds-layer");
         
@@ -617,8 +902,14 @@ const MindMap: React.FC<MindMapProps> = ({
 
         
         // Base ground rect position (below horizon)
-        bgLayer.select(".ground-rect").attr("y", horizonY + 50).attr("height", 100000);
+        const groundGroup = bgLayer.select(".ground-group");
+        groundGroup.attr("transform", `translate(0, ${horizonY + 50})`);
+        groundGroup.selectAll("rect").attr("height", 100000);
         
+        // Update Dirt Road Geometry (Perspective trapezoid)
+        groundGroup.select(".dirt-road")
+            .attr("d", `M${width/2 - 20}, -100 L${width/2 + 20}, -100 L${width/2 + 300}, 2000 L${width/2 - 300}, 2000 Z`);
+
         const hillsLayer = bgLayer.select(".landscape-layer");
         
         const updateHillGradient = (id: string, topColor: string, bottomColor: string) => {
@@ -746,6 +1037,20 @@ const MindMap: React.FC<MindMapProps> = ({
     let linkLayer = g.select<SVGGElement>(".links-layer");
     if (linkLayer.empty()) linkLayer = g.append("g").attr("class", "links-layer");
     
+    // Particles should be in atmosphere
+    let particlesLayer = g.select<SVGGElement>(".particles-layer");
+    if (particlesLayer.empty()) particlesLayer = g.append("g").attr("class", "particles-layer");
+
+    // Init Particles in D3
+    const pSel = particlesLayer.selectAll<SVGCircleElement, Particle>(".env-particle").data(particlesRef.current, d => d.id);
+    pSel.enter().append("circle")
+        .attr("class", "env-particle")
+        .attr("r", d => d.r)
+        .attr("fill", d => d.type === 'firefly' ? "#fde047" : "#ffedd5")
+        .attr("pointer-events", "none")
+        .attr("opacity", 0);
+    pSel.exit().remove();
+
     let stemLayer = g.select<SVGGElement>(".stem-layer");
     if (stemLayer.empty()) stemLayer = g.insert("g", ".nodes-layer").attr("class", "stem-layer");
 
@@ -796,6 +1101,42 @@ const MindMap: React.FC<MindMapProps> = ({
         if (!currentIds.has(id)) nodesMapRef.current.delete(id);
     }
     nodes.forEach(n => nodesMapRef.current.set(n.id, n));
+
+    // --- HINT LAYER ---
+    let hintLayer = g.select<SVGGElement>(".hint-layer");
+    if (hintLayer.empty()) hintLayer = g.append("g").attr("class", "hint-layer").attr("pointer-events", "none");
+
+    if (layoutMode === LayoutMode.SEED && data.nodes.length === 1) {
+        const rootNode = nodes.find(n => n.id === 'root');
+        if (rootNode) {
+             const hGroup = hintLayer.selectAll(".hint-group").data([rootNode]);
+             const hEnter = hGroup.enter().append("g").attr("class", "hint-group");
+             
+             // Wrapper for animation
+             const hContent = hEnter.append("g").attr("class", "hint-content");
+             
+             hContent.append("path")
+                 .attr("d", "M0 0 L-8 -12 L-3 -12 L-3 -28 L3 -28 L3 -12 L8 -12 Z") // Arrow shape
+                 .attr("fill", "#ffffff")
+                 .attr("stroke", "#22c55e")
+                 .attr("stroke-width", 2)
+                 .attr("transform", "scale(1.5)");
+                 
+             hContent.append("text")
+                 .text("Click to Grow")
+                 .attr("y", -55)
+                 .attr("text-anchor", "middle")
+                 .attr("fill", "#ffffff")
+                 .attr("font-weight", "bold")
+                 .style("font-size", "14px")
+                 .style("text-shadow", "0 2px 4px rgba(0,0,0,0.5)");
+
+             const hMerge = hEnter.merge(hGroup as any);
+             hMerge.attr("transform", d => `translate(${d.x}, ${(d.y || 0) - 50})`);
+        }
+    } else {
+        hintLayer.selectAll("*").remove();
+    }
     
     // --- 3. SIMULATION ---
     let simulation = d3.forceSimulation<Node, Link>(nodes)
@@ -859,7 +1200,51 @@ const MindMap: React.FC<MindMapProps> = ({
         if(g.select(".tree-shadow").empty()) g.insert("path", ":first-child").attr("class", "tree-shadow").attr("fill", "black").attr("opacity", 0.4).attr("filter", "url(#nodeGlow)");
         if(g.select(".bark-core").empty()) g.append("path").attr("class", "bark-core").attr("fill", "url(#trunk3D)").attr("filter", "url(#cylinderLight)");
         if(g.select(".bark-texture").empty()) g.append("path").attr("class", "bark-texture").attr("fill", "url(#trunk3D)").attr("opacity", 0.6).attr("filter", "url(#barkTexture)");
+        // Add container for rocks/grass inside the stem group so they move with root node
+        if(g.select(".rocks-layer").empty()) g.insert("g", ".bark-core").attr("class", "rocks-layer");
+        if(g.select(".grass-layer-path").empty()) g.insert("path", ".rocks-layer").attr("class", "grass-layer-path").attr("fill", "#4d7c0f");
     });
+    
+    // Render Rocks once
+    stemGroup.select(".rocks-layer").selectAll<SVGEllipseElement, Rock>(".env-rock")
+        .data(rocksRef.current)
+        .join("ellipse")
+        .attr("class", "env-rock")
+        .attr("cx", d => d.xOffset)
+        .attr("cy", d => d.yOffset) 
+        .attr("rx", d => d.rx)
+        .attr("ry", d => d.ry)
+        .attr("fill", d => d.color)
+        .attr("transform", d => `rotate(${d.rotation * 180 / Math.PI})`)
+        .attr("filter", "url(#cylinderLight)");
+
+    // Render Logs (New)
+    stemGroup.select(".rocks-layer").selectAll<SVGGElement, Log>(".env-log")
+        .data(logsRef.current)
+        .join(enter => {
+            const lg = enter.append("g").attr("class", "env-log");
+            lg.append("rect").attr("class", "log-body");
+            lg.append("circle").attr("class", "log-cap");
+            return lg;
+        })
+        .attr("transform", d => `translate(${d.xOffset}, ${d.yOffset}) rotate(${d.rotation * 180 / Math.PI})`)
+        .each(function(d) {
+            const el = d3.select(this);
+            el.select(".log-body")
+                .attr("x", -d.width / 2)
+                .attr("y", -d.height / 2)
+                .attr("width", d.width)
+                .attr("height", d.height)
+                .attr("fill", d.color)
+                .attr("filter", "url(#barkTexture)");
+            el.select(".log-cap")
+                .attr("cx", -d.width / 2)
+                .attr("cy", 0)
+                .attr("r", d.height / 2)
+                .attr("fill", "#5D4037") // Darker core
+                .attr("stroke", "#3E2723")
+                .attr("stroke-width", 1);
+        });
 
     const linkGroup = linkLayer.selectAll<SVGGElement, Link>(".link-group")
       .data(links, (d: any) => `${(d.source as Node).id || d.source}-${(d.target as Node).id || d.target}`)
@@ -940,18 +1325,17 @@ const MindMap: React.FC<MindMapProps> = ({
        
        // Correct Shadow Projection Logic
        const sunX = sunData.cx;
-       // Vector from Sun X to Root X
        const lightDirX = width / 2 - sunX;
-       
-       // Calculate skew angle based on sun position relative to center
-       // When sun is far left, shadow skewed right (positive angle)
-       // Range: approx -60deg to 60deg
        const skewAngle = Math.atan2(lightDirX, height * 0.8) * (180 / Math.PI) * 2;
        
-       // Calculate shadow length (scaleY)
-       // Lower sun = longer shadow. 
-       const shadowLength = Math.min(0.6, Math.max(0.1, Math.abs(lightDirX) / width));
-
+       // Update Hint Position during tick (since root moves in force sim slightly or during initialization)
+       if (layoutMode === LayoutMode.SEED && data.nodes.length === 1) {
+           const root = nodes.find(n => n.id === 'root');
+           if (root) {
+               hintLayer.select(".hint-group").attr("transform", `translate(${root.x}, ${(root.y || 0) - 50})`);
+           }
+       }
+       
        if (layoutMode === LayoutMode.SEED) {
           const rootNode = nodes.find(n => n.id === 'root');
           
@@ -959,6 +1343,9 @@ const MindMap: React.FC<MindMapProps> = ({
 
           const rootX = rootNode.x;
           const rootY = rootNode.y;
+          // Store root pos for grass/particles ref
+          rootPosRef.current = { x: rootX, y: groundY };
+
           const totalNodesCount = nodes.length;
           
           const trunkBaseWidth = Math.min(280, 80 + (totalNodesCount * 6));
@@ -978,14 +1365,17 @@ const MindMap: React.FC<MindMapProps> = ({
              // "Breathing" tree effect
              const breathe = Math.sin(time) * 2;
 
-             const steps = 20; 
+             const steps = 30; // Increased steps for smoother roots
              const leftPath: [number, number][] = [];
              const rightPath: [number, number][] = [];
              
              for(let i=0; i<=steps; i++) {
                  const t = i/steps; 
                  const widthT = t * t * t; 
-                 const currentWidth = (trunkTopWidth + widthT * (trunkBaseWidth - trunkTopWidth)) + (breathe * (1-t));
+                 // Add Root Flare at bottom 15% of trunk
+                 const rootFlare = t > 0.85 ? Math.pow((t - 0.85) * 6.6, 2) * (trunkBaseWidth * 0.8) : 0;
+                 
+                 const currentWidth = (trunkTopWidth + widthT * (trunkBaseWidth - trunkTopWidth)) + (breathe * (1-t)) + rootFlare;
                  const currentY = rootY + (t * (groundY - rootY));
                  const noise = Math.sin(i * 1.5) * (trunkBaseWidth * 0.03); 
                  
@@ -1006,8 +1396,6 @@ const MindMap: React.FC<MindMapProps> = ({
              grp.select(".bark-texture").attr("d", dString);
              
              // Correct Projected Shadow
-             // Instead of manually skewing points, we apply a transform to the shadow path to project it on ground.
-             // Anchor point is the bottom center of the trunk.
              const anchorX = rootX;
              const anchorY = groundY;
              
@@ -1016,6 +1404,15 @@ const MindMap: React.FC<MindMapProps> = ({
                 .attr("transform-origin", `${anchorX}px ${anchorY}px`)
                 .attr("transform", `scale(1, 0.3) skewX(${-skewAngle})`);
 
+             // Position Rocks/Grass Group at base
+             grp.select(".rocks-layer").attr("transform", `translate(${rootX}, ${groundY})`);
+             // Grass path is updated in animate loop for sway, but we need to position the container if we used one
+             // Here we just use the pre-inserted path, which will be updated with absolute coords in animate
+             // Actually, lets move grass path to rocks layer to inherit translate!
+             // Update: Grass swaying logic needs time, easiest to do absolute coords based on rootX in animate,
+             // OR put it in a group here and use relative coords. Let's do relative to rootX/groundY.
+             // See animate loop.
+             
              // --- Top Crown / False Tip Branches ---
              const growthProgress = Math.min(1, Math.max(0, (nodes.length - 1) / 10));
 
@@ -1219,10 +1616,6 @@ const MindMap: React.FC<MindMapProps> = ({
                 .attr("stroke", "#5D4037") 
                 .attr("stroke-width", strokeWidth)
                 .attr("opacity", 1);
-             
-             // Removed floating branch shadow for cleaner look
-             // as branch shadows on ground are hard to calculate correctly in 2D without looking detached
-             // group.select(".branch-shadow")...
 
              const rng = makeRng(seed);
              group.selectAll(".procedural-twig").remove();

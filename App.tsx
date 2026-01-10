@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Search, Upload, Share2, Grid, Folder, FileText, Settings, X, Plus, BarChart2, Moon, Sun, Network, Sprout, Minus, Flower2, ArrowRight, Edit3, MapPin, FolderOpen, Video, Image as ImageIcon, ChevronRight, ChevronDown, Eye, EyeOff, Music, Table, FolderPlus, FilePlus, ArrowUp, Trash2 } from 'lucide-react';
 import MindMap from './components/MindMap';
 import Stats from './components/Stats';
+import ProjectsView from './components/ProjectsView';
 import { searchAndGenerateGraph, getDocumentSummary } from './services/geminiService';
 import { MOCK_DOCUMENTS, INITIAL_GRAPH_DATA, THEMES } from './constants';
 import { GraphData, Node, Document, AppTheme, NodeType, LinkStyle, NodeIconType, LayoutMode } from './types';
@@ -37,6 +38,7 @@ function App() {
   const [layoutMode, setLayoutMode] = useState<LayoutMode>(LayoutMode.SPIDER);
   const [showSettings, setShowSettings] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<TabType>('all');
+  const [isDriveConnected, setIsDriveConnected] = useState(false);
   
   // New State for Landing Page
   const [isLanding, setIsLanding] = useState(true);
@@ -454,7 +456,7 @@ function App() {
       const newDocs: Document[] = [];
       
       // 1. Identify Root Folder(s) if expanding from directory upload
-      const rootFoldersMap = new Map<string, Node>(); // Name -> Node
+      const rootFoldersMap = new Map<string, Node>(); // Key -> Node
 
       filesArray.forEach(file => {
           // Robust filter: System files, hidden files, or deep configs
@@ -476,32 +478,56 @@ function App() {
               let parentId = parentNode.id;
 
               dirParts.forEach((part, index) => {
-                  const isRootFolder = index === 0;
                   const key = currentPath ? `${currentPath}/${part}` : part;
+                  const localKey = `${parentId}/${part}`; // Unique key combining parent and name
                   currentPath = key;
 
-                  if (!rootFoldersMap.has(key)) {
-                       // Create Directory Node
-                       const folderId = `folder-${key.replace(/\W/g, '')}-${Date.now()}`;
-                       const folderNode: Node = {
-                          id: folderId,
-                          name: part,
-                          type: NodeType.PROJECT,
-                          val: 18,
-                          description: `Folder: ${part}`,
-                          iconType: 'folder',
-                          level: (parentNode.level || 0) + index + 1,
-                          project: parentNode.project,
-                          // If parent is root, this is Level 1 -> Green. Else -> Blue.
-                          color: parentId === 'root' ? '#22c55e' : '#3b82f6',
-                          collapsed: true // Start FOLDED (Collapsed)
-                       };
-                       newNodes.push(folderNode);
-                       newLinks.push({ source: parentId, target: folderId, value: 3 });
-                       rootFoldersMap.set(key, folderNode);
+                  if (!rootFoldersMap.has(localKey)) {
+                       // Check if folder already exists in the graph to merge
+                       const existingLink = masterGraphData.links.find(l => {
+                           const s = typeof l.source === 'object' ? l.source.id : l.source;
+                           return s === parentId;
+                       });
+                       
+                       const siblingNodes = masterGraphData.links
+                          .filter(l => (typeof l.source === 'object' ? l.source.id : l.source) === parentId)
+                          .map(l => {
+                              const tId = typeof l.target === 'object' ? l.target.id : l.target;
+                              return masterGraphData.nodes.find(n => n.id === tId);
+                          })
+                          .filter(n => n && n.name === part && n.type === NodeType.PROJECT);
+
+                       let folderNode = siblingNodes[0];
+
+                       if (!folderNode) {
+                           // Check if we created it in this batch (e.g. earlier iteration)
+                           folderNode = newNodes.find(n => n.name === part && n.type === NodeType.PROJECT && newLinks.some(l => l.source === parentId && l.target === n.id));
+                       }
+
+                       if (!folderNode) {
+                           // Create Directory Node
+                           const folderId = `folder-${key.replace(/\W/g, '')}-${Date.now()}-${Math.random()}`;
+                           folderNode = {
+                              id: folderId,
+                              name: part,
+                              type: NodeType.PROJECT,
+                              val: 18,
+                              description: `Folder: ${part}`,
+                              iconType: 'folder',
+                              level: (parentNode.level || 0) + index + 1,
+                              project: parentNode.project,
+                              // If parent is root, this is Level 1 -> Green. Else -> Blue.
+                              color: parentId === 'root' ? '#22c55e' : '#3b82f6',
+                              collapsed: true // Start FOLDED (Collapsed)
+                           };
+                           newNodes.push(folderNode);
+                           newLinks.push({ source: parentId, target: folderId, value: 3 });
+                       }
+                       
+                       rootFoldersMap.set(localKey, folderNode!);
                   }
                   
-                  const node = rootFoldersMap.get(key)!;
+                  const node = rootFoldersMap.get(localKey)!;
                   parentId = node.id;
                   
                   // Update target for file insertion
@@ -530,7 +556,6 @@ function App() {
           }
 
           // Find or Create Category Node attached to targetParentId
-          // We need a unique ID based on parent + bucket to allow multiple "Images" nodes in different folders
           const catNodeName = bucketName;
           
           // Check in current batch first
@@ -567,7 +592,6 @@ function App() {
           }
 
           // 3. Create Document Object (BUT NO GRAPH NODE)
-          // This ensures "it should not be able to show each individual image" in graph
           const fileId = `file-${Date.now()}-${Math.random()}`;
           let docType = 'txt';
           if (name.endsWith('pdf')) docType = 'pdf';
@@ -600,14 +624,66 @@ function App() {
 
   const handleFileUploadToNode = (e: React.ChangeEvent<HTMLInputElement>, parentNode: Node) => {
     if (e.target.files && e.target.files.length > 0) {
-        if (e.target.webkitdirectory) {
-            // Folder Upload
-            processFileList(e.target.files, parentNode);
-        } else {
-            // Single File Upload
-            processFileList(e.target.files, parentNode);
-        }
+        processFileList(e.target.files, parentNode);
     }
+  };
+
+  const handleConnectDrive = () => {
+      // Mock Connection
+      setIsDriveConnected(true);
+      
+      const driveId = 'drive-root';
+      const driveNode: Node = {
+          id: driveId,
+          name: 'Google Drive',
+          type: NodeType.PROJECT,
+          val: 20,
+          description: 'Connected Cloud Storage',
+          iconType: 'folder',
+          color: '#10b981', // Green like Drive
+          level: 1,
+          project: 'Cloud',
+          collapsed: false
+      };
+      
+      // Mock Subfolders
+      const sub1: Node = {
+          id: 'drive-sub-1',
+          name: 'Shared with me',
+          type: NodeType.PROJECT,
+          val: 15,
+          description: 'Shared items',
+          iconType: 'folder',
+          color: '#34d399',
+          level: 2,
+          project: 'Cloud',
+          collapsed: true
+      };
+      
+      const sub2: Node = {
+          id: 'drive-sub-2',
+          name: 'My Projects',
+          type: NodeType.PROJECT,
+          val: 15,
+          description: 'Personal projects',
+          iconType: 'folder',
+          color: '#34d399',
+          level: 2,
+          project: 'Cloud',
+          collapsed: true
+      };
+
+      setMasterGraphData(prev => ({
+          nodes: [...prev.nodes, driveNode, sub1, sub2],
+          links: [
+              ...prev.links,
+              { source: 'root', target: driveId, value: 3 },
+              { source: driveId, target: sub1.id, value: 2 },
+              { source: driveId, target: sub2.id, value: 2 }
+          ]
+      }));
+      
+      alert("Google Drive Connected! Folders added to your graph.");
   };
 
   // Helper to get children for sidebar list (Graph Nodes)
@@ -818,11 +894,17 @@ function App() {
             )}
 
             {currentView === 'projects' && (
-                 <div className="p-8 flex flex-col items-center justify-center h-full opacity-60">
-                     <FolderOpen size={64} className="mb-4" />
-                     <h2 className="text-xl font-bold">Projects View</h2>
-                     <p>Manage your document repositories here.</p>
-                 </div>
+                 <ProjectsView 
+                    nodes={masterGraphData.nodes}
+                    onSelectNode={(node) => {
+                        setSelectedNode(node);
+                        setCurrentView('map');
+                    }}
+                    onConnectDrive={handleConnectDrive}
+                    isDriveConnected={isDriveConnected}
+                    theme={themeConfig}
+                    darkMode={isDarkMode}
+                 />
             )}
             
             {/* Context Panel (Right Sidebar for selected node) */}
@@ -830,7 +912,9 @@ function App() {
                 <div className={`absolute top-4 right-4 w-80 max-h-[calc(100%-2rem)] rounded-2xl shadow-2xl border flex flex-col overflow-hidden backdrop-blur-md transition-all ${isDarkMode ? 'bg-slate-900/90 border-slate-700 text-slate-200' : 'bg-white/90 border-slate-200 text-slate-800'}`}>
                     <div className={`p-4 border-b flex items-center justify-between ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
                         <div className="flex items-center gap-2 font-bold">
-                           {selectedNode.type === NodeType.PROJECT ? <Folder size={18} className="text-blue-500" /> : <FileText size={18} className="text-emerald-500" />}
+                           {selectedNode.type === NodeType.PROJECT ? <Folder size={18} className="text-blue-500" /> : 
+                            selectedNode.type === NodeType.ROOT ? <Network size={18} className="text-purple-500" /> :
+                            <FileText size={18} className="text-emerald-500" />}
                            <span className="truncate max-w-[180px]">{selectedNode.name}</span>
                         </div>
                         <button onClick={() => setSelectedNode(null)} className="p-1 hover:bg-black/10 rounded-full">
@@ -855,7 +939,7 @@ function App() {
                         </div>
 
                          {/* Attachments Section */}
-                        {selectedNode.type === NodeType.CATEGORY || selectedNode.type === NodeType.PROJECT ? (
+                        {selectedNode.type === NodeType.CATEGORY || selectedNode.type === NodeType.PROJECT || selectedNode.type === NodeType.ROOT ? (
                              <div>
                                 <label className="text-xs font-bold uppercase tracking-wider opacity-50 mb-2 block flex items-center justify-between">
                                     Files
@@ -873,11 +957,18 @@ function App() {
                                         <div className="text-xs opacity-50 text-center py-4 border border-dashed rounded-lg">No files attached</div>
                                     )}
                                     
-                                    {/* Upload Trigger */}
-                                    <label className={`flex items-center justify-center gap-2 p-2 rounded-lg border border-dashed cursor-pointer text-xs font-bold transition-colors ${isDarkMode ? 'border-slate-700 hover:bg-slate-800 text-slate-400' : 'border-slate-300 hover:bg-slate-50 text-slate-500'}`}>
-                                         <input type="file" multiple className="hidden" onChange={(e) => handleFileUploadToNode(e, selectedNode)} />
-                                         <Upload size={14} /> Upload Files
-                                    </label>
+                                    {/* Upload Triggers */}
+                                    <div className="flex gap-2">
+                                        <label className={`flex-1 flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-dashed cursor-pointer text-[10px] font-bold transition-colors ${isDarkMode ? 'border-slate-700 hover:bg-slate-800 text-slate-400' : 'border-slate-300 hover:bg-slate-50 text-slate-500'}`}>
+                                             <input type="file" multiple className="hidden" onChange={(e) => handleFileUploadToNode(e, selectedNode)} />
+                                             <FilePlus size={16} /> Add Files
+                                        </label>
+                                        <label className={`flex-1 flex flex-col items-center justify-center gap-1 p-2 rounded-lg border border-dashed cursor-pointer text-[10px] font-bold transition-colors ${isDarkMode ? 'border-slate-700 hover:bg-slate-800 text-slate-400' : 'border-slate-300 hover:bg-slate-50 text-slate-500'}`}>
+                                             {/* webkitdirectory attribute handled via spread to avoid TS strict check issues in some envs */}
+                                             <input type="file" multiple {...({ webkitdirectory: "" } as any)} className="hidden" onChange={(e) => handleFileUploadToNode(e, selectedNode)} />
+                                             <FolderPlus size={16} /> Add Folder
+                                        </label>
+                                    </div>
                                 </div>
                              </div>
                         ) : null}
