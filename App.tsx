@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, Upload, Share2, Grid, Folder, FileText, Settings, X, Plus, BarChart2, Moon, Sun, Network, Sprout, Minus, Flower2, ArrowRight, Edit3, MapPin, FolderOpen, Video, Image as ImageIcon, ChevronRight, ChevronDown, Eye, EyeOff, Music, Table, FolderPlus, FilePlus, ArrowUp, Trash2 } from 'lucide-react';
+import { Search, Upload, Share2, Grid, Folder, FileText, Settings, X, Plus, BarChart2, Moon, Sun, Network, Sprout, Minus, Flower2, ArrowRight, Edit3, MapPin, FolderOpen, Video, Image as ImageIcon, ChevronRight, ChevronDown, Eye, EyeOff, Music, Table, FolderPlus, FilePlus, ArrowUp, Trash2, FileSearch } from 'lucide-react';
 import MindMap from './components/MindMap';
 import Stats from './components/Stats';
 import ProjectsView from './components/ProjectsView';
@@ -173,6 +173,58 @@ function App() {
     e.preventDefault();
     if (!query.trim()) return;
 
+    // --- 1. LOCAL SEARCH (Priority) ---
+    // Search within existing graph first (File Searcher behavior)
+    const lowerQuery = query.toLowerCase();
+    const matches = masterGraphData.nodes.filter(n => 
+        n.name.toLowerCase().includes(lowerQuery) || 
+        (n.description && n.description.toLowerCase().includes(lowerQuery))
+    );
+
+    // Rank matches: Exact > StartsWith > Includes
+    matches.sort((a, b) => {
+        const aName = a.name.toLowerCase();
+        const bName = b.name.toLowerCase();
+        if (aName === lowerQuery && bName !== lowerQuery) return -1;
+        if (bName === lowerQuery && aName !== lowerQuery) return 1;
+        if (aName.startsWith(lowerQuery) && !bName.startsWith(lowerQuery)) return -1;
+        if (bName.startsWith(lowerQuery) && !aName.startsWith(lowerQuery)) return 1;
+        return 0;
+    });
+
+    const bestMatch = matches[0];
+
+    if (bestMatch) {
+        // Expand path to the found node so it's visible
+        const parentMap = new Map<string, string>();
+        masterGraphData.links.forEach(l => {
+            const s = typeof l.source === 'object' ? l.source.id : l.source;
+            const t = typeof l.target === 'object' ? l.target.id : l.target;
+            parentMap.set(t as string, s as string);
+        });
+
+        const nodesToExpand = new Set<string>();
+        let curr = bestMatch.id;
+        while(curr) {
+            const pid = parentMap.get(curr);
+            if (!pid) break;
+            nodesToExpand.add(pid);
+            curr = pid;
+        }
+
+        setMasterGraphData(prev => ({
+            ...prev,
+            nodes: prev.nodes.map(n => 
+                nodesToExpand.has(n.id) ? { ...n, collapsed: false } : n
+            )
+        }));
+
+        setSelectedNode(bestMatch);
+        return; // Stop here if local match found
+    }
+
+    // --- 2. GENERATIVE FALLBACK ---
+    // If no local file found, generate content via AI
     setIsLoading(true);
     
     try {
@@ -861,7 +913,7 @@ function App() {
                 type="text" 
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder={layoutMode === LayoutMode.SEED ? "What do you want to grow?" : "Search documentation, projects, or concepts..."}
+                placeholder="Search for files, folders, or branches..."
                 className={`w-full pl-12 pr-4 py-2.5 rounded-xl outline-none transition-all border ${isDarkMode ? 'bg-slate-800 border-slate-700 focus:border-cyan-500 text-white placeholder-slate-500' : 'bg-slate-100 border-slate-200 focus:border-blue-500 text-slate-900 placeholder-slate-500'}`}
               />
            </form>

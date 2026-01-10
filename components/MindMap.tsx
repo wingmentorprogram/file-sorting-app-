@@ -711,12 +711,8 @@ const MindMap: React.FC<MindMapProps> = ({
             sg.append("stop").attr("offset", "100%").attr("stop-color", "white").attr("stop-opacity", 0);
         }
         
-        // Sun Spot (Ground Highlight)
-        if (defs.select("#sunSpot").empty()) {
-            const ss = defs.append("radialGradient").attr("id", "sunSpot").attr("cx", "50%").attr("cy", "50%").attr("r", "50%");
-            ss.append("stop").attr("offset", "0%").attr("stop-color", "#fcd34d").attr("stop-opacity", 0.4); // Golden center
-            ss.append("stop").attr("offset", "100%").attr("stop-color", "transparent").attr("stop-opacity", 0);
-        }
+        // Sun Spot (Ground Highlight) - Removed to fix artifact
+        // if (defs.select("#sunSpot").empty()) { ... }
 
         if (defs.select("#trunk3D").empty()) {
             const tGrad = defs.append("linearGradient").attr("id", "trunk3D").attr("x1", "0%").attr("y1", "0%").attr("x2", "100%").attr("y2", "0%");
@@ -737,12 +733,7 @@ const MindMap: React.FC<MindMapProps> = ({
              gg.append("stop").attr("offset", "100%").attr("stop-color", "#0f1a03"); // Foreground very dark
         }
         
-        // Road Gradient
-        if (defs.select("#roadGradient").empty()) {
-             const rg = defs.append("linearGradient").attr("id", "roadGradient").attr("x1", "0%").attr("y1", "0%").attr("x2", "0%").attr("y2", "100%");
-             rg.append("stop").attr("offset", "0%").attr("stop-color", "#78350f"); // Darker dirt at horizon
-             rg.append("stop").attr("offset", "100%").attr("stop-color", "#92400e"); // Lighter near cam
-        }
+        // Removed Road Gradient
     }
     
     // Update Dynamic Sky Gradient (3 Stops for Horizon Shader)
@@ -802,11 +793,9 @@ const MindMap: React.FC<MindMapProps> = ({
         ground.append("rect").attr("class", "ground-rect").attr("width", 200000).attr("x", -100000).attr("fill", "url(#groundGradient)"); 
         ground.append("rect").attr("class", "ground-texture").attr("width", 200000).attr("x", -100000).attr("filter", "url(#groundTexture)").attr("opacity", 0.2);
         
-        // Dirt Road (Added)
-        ground.append("path").attr("class", "dirt-road").attr("fill", "url(#roadGradient)").attr("opacity", 0.8).attr("filter", "url(#groundTexture)");
+        // Removed Dirt Road
         
-        // Sun Highlight on Grass (Added)
-        ground.append("ellipse").attr("class", "grass-highlight").attr("rx", 600).attr("ry", 100).attr("fill", "url(#sunSpot)").style("mix-blend-mode", "overlay");
+        // Removed Sun Highlight on Grass to fix artifact
     }
     
     // Background Trees Layer (After landscape, before main tree)
@@ -838,11 +827,7 @@ const MindMap: React.FC<MindMapProps> = ({
             .attr("cy", sunData.cy)
             .attr("opacity", sunData.isSun ? 0.6 : 0.1);
         
-        // Update Grass Highlight
-        bgLayer.select(".grass-highlight")
-            .attr("cx", width / 2) // Centered on scene
-            .attr("cy", 200) // Relative to ground group
-            .attr("opacity", sunData.isSun ? 0.6 : 0.1);
+        // Removed Update Grass Highlight logic
 
         // --- RENDER STARS ---
         const starsGroup = bgLayer.select(".stars-group");
@@ -906,9 +891,7 @@ const MindMap: React.FC<MindMapProps> = ({
         groundGroup.attr("transform", `translate(0, ${horizonY + 50})`);
         groundGroup.selectAll("rect").attr("height", 100000);
         
-        // Update Dirt Road Geometry (Perspective trapezoid)
-        groundGroup.select(".dirt-road")
-            .attr("d", `M${width/2 - 20}, -100 L${width/2 + 20}, -100 L${width/2 + 300}, 2000 L${width/2 - 300}, 2000 Z`);
+        // Removed Dirt Road Geometry update
 
         const hillsLayer = bgLayer.select(".landscape-layer");
         
