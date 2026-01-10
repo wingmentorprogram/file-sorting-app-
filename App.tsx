@@ -1176,7 +1176,28 @@ function App() {
                                             // Find the node corresponding to this doc to select it
                                             onClick={() => {
                                                 const fileNode = masterGraphData.nodes.find(n => n.id === doc.id);
-                                                if (fileNode) handleNodeSelect(fileNode);
+                                                if (fileNode) {
+                                                    handleNodeSelect(fileNode);
+                                                } else {
+                                                    // Create temp node for viewing documents that aren't visually on the graph
+                                                    const tempNode: Node = {
+                                                        id: doc.id,
+                                                        name: doc.title,
+                                                        type: NodeType.DOCUMENT,
+                                                        val: 10,
+                                                        description: doc.content || 'Attached File',
+                                                        iconType: doc.type === 'link' ? 'link' : (
+                                                              doc.type === 'mp4' ? 'video' :
+                                                              (doc.type === 'jpg' || doc.type === 'png') ? 'image' :
+                                                              doc.type === 'mp3' ? 'music' :
+                                                              (doc.type === 'xlsx' || doc.type === 'csv') ? 'spreadsheet' : 'file'
+                                                        ),
+                                                        level: (selectedNode.level || 0) + 1,
+                                                        project: selectedNode.project,
+                                                        collapsed: false
+                                                    };
+                                                    handleNodeSelect(tempNode);
+                                                }
                                             }}
                                             className={`flex items-center gap-2 p-2 rounded-lg text-sm border cursor-pointer transition-colors ${isDarkMode ? 'bg-slate-800/50 border-slate-700 hover:bg-slate-800' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}`}
                                         >
