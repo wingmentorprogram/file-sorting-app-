@@ -13,6 +13,7 @@ interface MindMapProps {
   theme: AppTheme;
   linkStyle: LinkStyle;
   layoutMode: LayoutMode;
+  graphicsQuality: 'low' | 'mid' | 'high';
   focusedNodeId?: string | null;
 }
 
@@ -205,6 +206,7 @@ const MindMap: React.FC<MindMapProps> = ({
     theme, 
     linkStyle, 
     layoutMode, 
+    graphicsQuality,
     focusedNodeId 
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
@@ -236,12 +238,18 @@ const MindMap: React.FC<MindMapProps> = ({
   useEffect(() => {
     const rng = makeRng(888);
     
+    // Quality Settings Config
+    const counts = {
+        low: { clouds: 3, cloudPuffs: [3, 5], stars: 30, grass: 0, particles: 0 },
+        mid: { clouds: 8, cloudPuffs: [4, 8], stars: 100, grass: 600, particles: 15 },
+        high: { clouds: 15, cloudPuffs: [6, 14], stars: 200, grass: 2500, particles: 50 }
+    }[graphicsQuality];
+
     // Clouds
-    const cloudCount = 15;
     const clouds: Cloud[] = [];
-    for(let i=0; i<cloudCount; i++) {
+    for(let i=0; i<counts.clouds; i++) {
         const puffs = [];
-        const puffCount = 6 + Math.floor(rng() * 8);
+        const puffCount = counts.cloudPuffs[0] + Math.floor(rng() * (counts.cloudPuffs[1] - counts.cloudPuffs[0]));
         for(let j=0; j<puffCount; j++) {
             puffs.push({
                 cx: (rng() - 0.5) * 160,
@@ -262,7 +270,7 @@ const MindMap: React.FC<MindMapProps> = ({
     }
     cloudsRef.current = clouds;
 
-    // Background Trees
+    // Background Trees - Fixed count, they aren't heavy
     if (bgTreesRef.current.length === 0) {
         const treeRng = makeRng(1234);
         const bgTrees: BackgroundTree[] = [];
@@ -276,47 +284,40 @@ const MindMap: React.FC<MindMapProps> = ({
     }
 
     // Stars
-    if (starsRef.current.length === 0) {
-        const starRng = makeRng(777);
-        const stars: Star[] = [];
-        for(let i=0; i<200; i++) {
-            stars.push({
-                id: `star-${i}`,
-                x: (starRng() - 0.5) * 4000,
-                y: (starRng() * 1200) - 1500,
-                r: 0.5 + starRng() * 1.8,
-                baseAlpha: 0.2 + starRng() * 0.8,
-                twinklePhase: starRng() * Math.PI * 2
-            });
-        }
-        starsRef.current = stars;
+    const stars: Star[] = [];
+    for(let i=0; i<counts.stars; i++) {
+        const starRng = makeRng(777 + i);
+        stars.push({
+            id: `star-${i}`,
+            x: (starRng() - 0.5) * 4000,
+            y: (starRng() * 1200) - 1500,
+            r: 0.5 + starRng() * 1.8,
+            baseAlpha: 0.2 + starRng() * 0.8,
+            twinklePhase: starRng() * Math.PI * 2
+        });
     }
+    starsRef.current = stars;
 
     // Grass
-    if (grassRef.current.length === 0) {
-        const grassRng = makeRng(555);
-        const blades: GrassBlade[] = [];
-        
-        // Spread grass across a much wider area (Whole Map effect)
-        const GRASS_WIDTH = 5000;
-        const BLADE_COUNT = 2500; // Increased density
+    const blades: GrassBlade[] = [];
+    const GRASS_WIDTH = 5000;
+    const grassRng = makeRng(555);
 
-        for(let i=0; i<BLADE_COUNT; i++) {
-             // Uniform distribution instead of Normal to cover the whole width equally
-             const xOffset = (grassRng() - 0.5) * GRASS_WIDTH; 
+    for(let i=0; i<counts.grass; i++) {
+            // Uniform distribution instead of Normal to cover the whole width equally
+            const xOffset = (grassRng() - 0.5) * GRASS_WIDTH; 
 
-             blades.push({
-                 id: `grass-${i}`,
-                 xOffset,
-                 h: 15 + grassRng() * 25,
-                 w: 2 + grassRng() * 4,
-                 angle: (grassRng() - 0.5) * 0.3,
-                 color: interpolateColor("#3f6212", "#65a30d", grassRng()),
-                 stiffness: 0.05 + grassRng() * 0.1
-             });
-        }
-        grassRef.current = blades.sort((a,b) => Math.abs(b.xOffset) - Math.abs(a.xOffset)); 
+            blades.push({
+                id: `grass-${i}`,
+                xOffset,
+                h: 15 + grassRng() * 25,
+                w: 2 + grassRng() * 4,
+                angle: (grassRng() - 0.5) * 0.3,
+                color: interpolateColor("#3f6212", "#65a30d", grassRng()),
+                stiffness: 0.05 + grassRng() * 0.1
+            });
     }
+    grassRef.current = blades.sort((a,b) => Math.abs(b.xOffset) - Math.abs(a.xOffset)); 
 
     // Rocks
     if (rocksRef.current.length === 0) {
@@ -355,24 +356,22 @@ const MindMap: React.FC<MindMapProps> = ({
     }
 
     // Particles
-    if (particlesRef.current.length === 0) {
-         const pRng = makeRng(999);
-         const parts: Particle[] = [];
-         for(let i=0; i<50; i++) {
-             parts.push({
-                 id: `p-${i}`,
-                 x: (pRng() - 0.5) * 2000,
-                 y: (pRng() * 1000) - 500,
-                 vx: (pRng() - 0.5) * 0.3,
-                 vy: (pRng() - 0.5) * 0.3,
-                 r: 1 + pRng() * 2.5,
-                 phase: pRng() * Math.PI * 2,
-                 type: pRng() > 0.5 ? 'firefly' : 'pollen'
-             });
-         }
-         particlesRef.current = parts;
+    const parts: Particle[] = [];
+    for(let i=0; i<counts.particles; i++) {
+            const pRng = makeRng(999 + i);
+            parts.push({
+                id: `p-${i}`,
+                x: (pRng() - 0.5) * 2000,
+                y: (pRng() * 1000) - 500,
+                vx: (pRng() - 0.5) * 0.3,
+                vy: (pRng() - 0.5) * 0.3,
+                r: 1 + pRng() * 2.5,
+                phase: pRng() * Math.PI * 2,
+                type: pRng() > 0.5 ? 'firefly' : 'pollen'
+            });
     }
-  }, []);
+    particlesRef.current = parts;
+  }, [graphicsQuality]); // Re-run when quality settings change
   
   // Animation loop for Day/Night and Environment
   useEffect(() => {
@@ -637,6 +636,15 @@ const MindMap: React.FC<MindMapProps> = ({
       return d.color || themeColors.node;
   };
 
+  const getFilterUrl = (id: string) => {
+    if (graphicsQuality === 'low') return null;
+    if (graphicsQuality === 'mid') {
+        // Disable noise-based filters in mid, keep lighting/glow
+        if (id === 'barkTexture' || id === 'cloudNoise' || id === 'groundTexture') return null;
+    }
+    return `url(#${id})`;
+  }
+
   // --- D3 RENDERING EFFECT ---
   useEffect(() => {
     if (!svgRef.current || !data.nodes.length) return;
@@ -710,9 +718,6 @@ const MindMap: React.FC<MindMapProps> = ({
             sg.append("stop").attr("offset", "0%").attr("stop-color", "white").attr("stop-opacity", 0.6);
             sg.append("stop").attr("offset", "100%").attr("stop-color", "white").attr("stop-opacity", 0);
         }
-        
-        // Sun Spot (Ground Highlight) - Removed to fix artifact
-        // if (defs.select("#sunSpot").empty()) { ... }
 
         if (defs.select("#trunk3D").empty()) {
             const tGrad = defs.append("linearGradient").attr("id", "trunk3D").attr("x1", "0%").attr("y1", "0%").attr("x2", "100%").attr("y2", "0%");
@@ -732,8 +737,6 @@ const MindMap: React.FC<MindMapProps> = ({
              gg.append("stop").attr("offset", "0%").attr("stop-color", "#1a2e05"); // Horizon dark green
              gg.append("stop").attr("offset", "100%").attr("stop-color", "#0f1a03"); // Foreground very dark
         }
-        
-        // Removed Road Gradient
     }
     
     // Update Dynamic Sky Gradient (3 Stops for Horizon Shader)
@@ -769,7 +772,7 @@ const MindMap: React.FC<MindMapProps> = ({
         // Base gradient
         bgLayer.append("rect").attr("class", "sky-rect").attr("width", 200000).attr("x", -100000).attr("y", -100000).attr("height", 200000).attr("fill", "url(#skyGradient)");
         // Atmospheric noise overlay for realism
-        bgLayer.append("rect").attr("class", "sky-noise").attr("width", 200000).attr("x", -100000).attr("y", -100000).attr("height", 200000).attr("filter", "url(#cloudNoise)").attr("opacity", 0.15);
+        bgLayer.append("rect").attr("class", "sky-noise").attr("width", 200000).attr("x", -100000).attr("y", -100000).attr("height", 200000).attr("opacity", 0.15);
         
         // Stars Group
         bgLayer.append("g").attr("class", "stars-group");
@@ -791,12 +794,12 @@ const MindMap: React.FC<MindMapProps> = ({
         // Ground with gradient and texture
         const ground = bgLayer.append("g").attr("class", "ground-group");
         ground.append("rect").attr("class", "ground-rect").attr("width", 200000).attr("x", -100000).attr("fill", "url(#groundGradient)"); 
-        ground.append("rect").attr("class", "ground-texture").attr("width", 200000).attr("x", -100000).attr("filter", "url(#groundTexture)").attr("opacity", 0.2);
-        
-        // Removed Dirt Road
-        
-        // Removed Sun Highlight on Grass to fix artifact
+        ground.append("rect").attr("class", "ground-texture").attr("width", 200000).attr("x", -100000).attr("opacity", 0.2);
     }
+    
+    // Update filters on static bg elements
+    bgLayer.select(".sky-noise").attr("filter", getFilterUrl("cloudNoise"));
+    bgLayer.select(".ground-texture").attr("filter", getFilterUrl("groundTexture"));
     
     // Background Trees Layer (After landscape, before main tree)
     let bgTreesLayer = bgLayer.select<SVGGElement>(".bg-trees-layer");
@@ -812,7 +815,7 @@ const MindMap: React.FC<MindMapProps> = ({
             .attr("cx", sunData.cx)
             .attr("cy", sunData.cy)
             .attr("fill", sunData.lightColor)
-            .attr("filter", "url(#nodeGlow)") 
+            .attr("filter", getFilterUrl("nodeGlow")) 
             .attr("opacity", 0.9);
 
         // Update Sun Glow
@@ -827,12 +830,12 @@ const MindMap: React.FC<MindMapProps> = ({
             .attr("cy", sunData.cy)
             .attr("opacity", sunData.isSun ? 0.6 : 0.1);
         
-        // Removed Update Grass Highlight logic
 
         // --- RENDER STARS ---
         const starsGroup = bgLayer.select(".stars-group");
+        // JOIN stars data
         const starSel = starsGroup.selectAll<SVGCircleElement, Star>(".star-circle")
-            .data(starsRef.current);
+            .data(starsRef.current, d => d.id);
         
         starSel.enter().append("circle")
             .attr("class", "star-circle")
@@ -841,6 +844,8 @@ const MindMap: React.FC<MindMapProps> = ({
             .attr("r", d => d.r)
             .attr("fill", "#ffffff")
             .attr("opacity", 0); // Init hidden, animate handles opacity
+        
+        starSel.exit().remove();
 
         // --- RENDER CLOUDS ---
         const cloudsLayer = bgLayer.select(".clouds-layer");
@@ -867,7 +872,7 @@ const MindMap: React.FC<MindMapProps> = ({
            
         const cloudEnter = cloudSelection.enter().append("g")
            .attr("class", "cloud-group")
-           .attr("filter", "url(#fluffyCloud)"); 
+           .attr("filter", getFilterUrl("fluffyCloud")); 
            
         // Draw puffs per cloud
         cloudEnter.each(function(d) {
@@ -878,6 +883,9 @@ const MindMap: React.FC<MindMapProps> = ({
              });
         });
 
+        // Update existing clouds if settings changed (e.g. filter)
+        cloudSelection.attr("filter", getFilterUrl("fluffyCloud"));
+
         const cloudUpdate = cloudEnter.merge(cloudSelection);
         
         cloudUpdate
@@ -885,13 +893,12 @@ const MindMap: React.FC<MindMapProps> = ({
            .attr("opacity", d => d.opacity * (sunData.isSun ? 0.9 : 0.4))
            .attr("fill", cloudColor);
 
+        cloudSelection.exit().remove();
         
         // Base ground rect position (below horizon)
         const groundGroup = bgLayer.select(".ground-group");
         groundGroup.attr("transform", `translate(0, ${horizonY + 50})`);
         groundGroup.selectAll("rect").attr("height", 100000);
-        
-        // Removed Dirt Road Geometry update
 
         const hillsLayer = bgLayer.select(".landscape-layer");
         
@@ -967,10 +974,10 @@ const MindMap: React.FC<MindMapProps> = ({
              // Shadow
              g.append("path").attr("class", "bg-tree-shadow")
               .attr("d", path)
-              .attr("fill", "black").attr("opacity", 0.3).attr("filter", "url(#nodeGlow)");
+              .attr("fill", "black").attr("opacity", 0.3).attr("filter", getFilterUrl("nodeGlow"));
 
              // Trunk Body
-             g.append("path").attr("d", path).attr("fill", "url(#trunk3D)").attr("filter", "url(#barkTexture)").attr("opacity", 0.9);
+             g.append("path").attr("d", path).attr("fill", "url(#trunk3D)").attr("filter", getFilterUrl("barkTexture")).attr("opacity", 0.9);
              
              // Crown Branches
              const bCount = 5;
@@ -990,7 +997,7 @@ const MindMap: React.FC<MindMapProps> = ({
                  
                  // Leaves
                  g.append("circle").attr("cx", ex).attr("cy", ey).attr("r", 25*d.scale)
-                  .attr("fill", "#4d7c0f").attr("opacity", 0.8).attr("filter", "url(#fluffyCloud)");
+                  .attr("fill", "#4d7c0f").attr("opacity", 0.8).attr("filter", getFilterUrl("fluffyCloud"));
              }
         });
         
@@ -1180,14 +1187,19 @@ const MindMap: React.FC<MindMapProps> = ({
     // Ensure shadow parts exist in stem group
     stemGroup.each(function() {
         const g = d3.select(this);
-        if(g.select(".tree-shadow").empty()) g.insert("path", ":first-child").attr("class", "tree-shadow").attr("fill", "black").attr("opacity", 0.4).attr("filter", "url(#nodeGlow)");
-        if(g.select(".bark-core").empty()) g.append("path").attr("class", "bark-core").attr("fill", "url(#trunk3D)").attr("filter", "url(#cylinderLight)");
-        if(g.select(".bark-texture").empty()) g.append("path").attr("class", "bark-texture").attr("fill", "url(#trunk3D)").attr("opacity", 0.6).attr("filter", "url(#barkTexture)");
+        if(g.select(".tree-shadow").empty()) g.insert("path", ":first-child").attr("class", "tree-shadow").attr("fill", "black").attr("opacity", 0.4).attr("filter", getFilterUrl("nodeGlow"));
+        if(g.select(".bark-core").empty()) g.append("path").attr("class", "bark-core").attr("fill", "url(#trunk3D)").attr("filter", getFilterUrl("cylinderLight"));
+        if(g.select(".bark-texture").empty()) g.append("path").attr("class", "bark-texture").attr("fill", "url(#trunk3D)").attr("opacity", 0.6).attr("filter", getFilterUrl("barkTexture"));
         // Add container for rocks/grass inside the stem group so they move with root node
         if(g.select(".rocks-layer").empty()) g.insert("g", ".bark-core").attr("class", "rocks-layer");
         if(g.select(".grass-layer-path").empty()) g.insert("path", ".rocks-layer").attr("class", "grass-layer-path").attr("fill", "#4d7c0f");
     });
     
+    // Update filters on existing elements
+    stemGroup.select(".tree-shadow").attr("filter", getFilterUrl("nodeGlow"));
+    stemGroup.select(".bark-core").attr("filter", getFilterUrl("cylinderLight"));
+    stemGroup.select(".bark-texture").attr("filter", getFilterUrl("barkTexture"));
+
     // Render Rocks once
     stemGroup.select(".rocks-layer").selectAll<SVGEllipseElement, Rock>(".env-rock")
         .data(rocksRef.current)
@@ -1199,7 +1211,7 @@ const MindMap: React.FC<MindMapProps> = ({
         .attr("ry", d => d.ry)
         .attr("fill", d => d.color)
         .attr("transform", d => `rotate(${d.rotation * 180 / Math.PI})`)
-        .attr("filter", "url(#cylinderLight)");
+        .attr("filter", getFilterUrl("cylinderLight"));
 
     // Render Logs (New)
     stemGroup.select(".rocks-layer").selectAll<SVGGElement, Log>(".env-log")
@@ -1219,7 +1231,7 @@ const MindMap: React.FC<MindMapProps> = ({
                 .attr("width", d.width)
                 .attr("height", d.height)
                 .attr("fill", d.color)
-                .attr("filter", "url(#barkTexture)");
+                .attr("filter", getFilterUrl("barkTexture"));
             el.select(".log-cap")
                 .attr("cx", -d.width / 2)
                 .attr("cy", 0)
@@ -1234,9 +1246,12 @@ const MindMap: React.FC<MindMapProps> = ({
       .join(enter => {
             const grp = enter.append("g").attr("class", "link-group");
             // Remove floating shadow path, only keep main branch
-            grp.append("path").attr("class", "branch-main").attr("fill", "none").attr("stroke-linecap", "round").attr("filter", "url(#cylinderLight)");
+            grp.append("path").attr("class", "branch-main").attr("fill", "none").attr("stroke-linecap", "round").attr("filter", getFilterUrl("cylinderLight"));
             return grp;
-        }, update => update, exit => exit.remove());
+        }, update => {
+            update.select(".branch-main").attr("filter", getFilterUrl("cylinderLight"));
+            return update;
+        }, exit => exit.remove());
 
     const nodeGroup = nodeLayer.selectAll<SVGGElement, Node>(".node-group")
       .data(nodes, d => d.id)
@@ -1275,21 +1290,21 @@ const MindMap: React.FC<MindMapProps> = ({
              const visualIconType = (d.id === 'root' && shouldShowTree) ? 'tree' : d.iconType;
 
              if (visualIconType === 'tree') {
-                  group.insert("circle", "text").attr("class", "node-bg").attr("r", d.val * 1.5).attr("fill", "#ffffff").attr("stroke", "#22c55e").attr("stroke-width", 3).attr("filter", "url(#nodeGlow)").on("click", (event, d) => { event.stopPropagation(); onNodeSelect(d); });
+                  group.insert("circle", "text").attr("class", "node-bg").attr("r", d.val * 1.5).attr("fill", "#ffffff").attr("stroke", "#22c55e").attr("stroke-width", 3).attr("filter", getFilterUrl("nodeGlow")).on("click", (event, d) => { event.stopPropagation(); onNodeSelect(d); });
                   const imgSize = d.val * 2.0;
                   group.insert("image", "text").attr("class", "node-image").attr("href", "https://lh3.googleusercontent.com/d/1LBUmOl-u3czx1hLf1NTgPrTnc9Gf1d1z").attr("width", imgSize).attr("height", imgSize).attr("x", -imgSize / 2).attr("y", -imgSize / 2).style("pointer-events", "none");
              } else if (visualIconType === 'leaf') {
-                  group.insert("circle", "text").attr("class", "node-bg").attr("r", d.val).attr("fill", "#84cc16").attr("stroke", "#ffffff").attr("stroke-width", 2).attr("filter", "url(#nodeGlow)").attr("cursor", "pointer").on("click", (event, d) => { event.stopPropagation(); onNodeSelect(d); });
+                  group.insert("circle", "text").attr("class", "node-bg").attr("r", d.val).attr("fill", "#84cc16").attr("stroke", "#ffffff").attr("stroke-width", 2).attr("filter", getFilterUrl("nodeGlow")).attr("cursor", "pointer").on("click", (event, d) => { event.stopPropagation(); onNodeSelect(d); });
                   group.insert("path", "text").attr("class", "node-icon").attr("d", ICONS.leaf).attr("fill", "#ffffff").attr("transform", `translate(-${d.val * 0.6}, -${d.val * 0.6}) scale(${d.val / 20})`).style("pointer-events", "none");
              } else if (visualIconType === 'folder' || d.type === NodeType.PROJECT) {
                   const size = d.val * 2.5;
-                  group.insert("rect", "text").attr("class", "node-bg").attr("width", size).attr("height", size).attr("x", -size / 2).attr("y", -size / 2).attr("rx", 6).attr("fill", color).attr("stroke", "#fff").attr("stroke-width", 2).attr("filter", theme === AppTheme.CYBER ? "url(#nodeGlow)" : null).on("click", (event, d) => { event.stopPropagation(); onNodeSelect(d); });
+                  group.insert("rect", "text").attr("class", "node-bg").attr("width", size).attr("height", size).attr("x", -size / 2).attr("y", -size / 2).attr("rx", 6).attr("fill", color).attr("stroke", "#fff").attr("stroke-width", 2).attr("filter", theme === AppTheme.CYBER ? getFilterUrl("nodeGlow") : null).on("click", (event, d) => { event.stopPropagation(); onNodeSelect(d); });
                   const iconPath = ICONS.folder;
                   if (iconPath) group.insert("path", "text").attr("class", "node-icon").attr("d", iconPath).attr("fill", "#ffffff").attr("transform", `translate(-${d.val * 0.6}, -${d.val * 0.6}) scale(${d.val / 20})`).style("pointer-events", "none");
              } else if (visualIconType === 'seed') {
                  group.insert("path", "text").attr("class", "node-bg").attr("d", ICONS.seed).attr("transform", "translate(-12, -12) scale(1.2)").attr("fill", getNodeColor(d)).on("click", (event, d) => { event.stopPropagation(); onNodeSelect(d); });
              } else {
-                  group.insert("circle", "text").attr("class", "node-bg").attr("r", d.val).attr("fill", color).attr("stroke", "#fff").attr("stroke-width", 2).attr("filter", theme === AppTheme.CYBER ? "url(#nodeGlow)" : null).on("click", (event, d) => { event.stopPropagation(); onNodeSelect(d); });
+                  group.insert("circle", "text").attr("class", "node-bg").attr("r", d.val).attr("fill", color).attr("stroke", "#fff").attr("stroke-width", 2).attr("filter", theme === AppTheme.CYBER ? getFilterUrl("nodeGlow") : null).on("click", (event, d) => { event.stopPropagation(); onNodeSelect(d); });
                   let type = d.iconType || 'default';
                   if (d.type === NodeType.DOCUMENT && type === 'default') type = 'file';
                   const iconPath = ICONS[type] || ICONS.default;
@@ -1485,8 +1500,8 @@ const MindMap: React.FC<MindMapProps> = ({
              grp.selectAll(".top-crown-branch")
                 .data(topBranchesData)
                 .join(
-                    enter => enter.append("path").attr("class", "top-crown-branch").attr("fill", "none").attr("stroke", "#5D4037").attr("stroke-linecap", "round").attr("filter", "url(#cylinderLight)"),
-                    update => update,
+                    enter => enter.append("path").attr("class", "top-crown-branch").attr("fill", "none").attr("stroke", "#5D4037").attr("stroke-linecap", "round").attr("filter", getFilterUrl("cylinderLight")),
+                    update => update.attr("filter", getFilterUrl("cylinderLight")),
                     exit => exit.remove()
                 )
                 .attr("d", (b: any) => b.d)
@@ -1495,8 +1510,8 @@ const MindMap: React.FC<MindMapProps> = ({
              grp.selectAll(".top-crown-sub")
                 .data(topSubBranchesData)
                 .join(
-                    enter => enter.append("path").attr("class", "top-crown-sub").attr("fill", "none").attr("stroke", "#5D4037").attr("stroke-linecap", "round").attr("filter", "url(#cylinderLight)"),
-                    update => update,
+                    enter => enter.append("path").attr("class", "top-crown-sub").attr("fill", "none").attr("stroke", "#5D4037").attr("stroke-linecap", "round").attr("filter", getFilterUrl("cylinderLight")),
+                    update => update.attr("filter", getFilterUrl("cylinderLight")),
                     exit => exit.remove()
                 )
                 .attr("d", (b: any) => b.d)
@@ -1548,8 +1563,8 @@ const MindMap: React.FC<MindMapProps> = ({
              grp.selectAll(".false-branch-trunk")
                 .data(falseBranchesData)
                 .join(
-                    enter => enter.append("path").attr("class", "false-branch-trunk").attr("fill", "none").attr("stroke", "#5D4037").attr("stroke-linecap", "round").attr("filter", "url(#cylinderLight)"),
-                    update => update,
+                    enter => enter.append("path").attr("class", "false-branch-trunk").attr("fill", "none").attr("stroke", "#5D4037").attr("stroke-linecap", "round").attr("filter", getFilterUrl("cylinderLight")),
+                    update => update.attr("filter", getFilterUrl("cylinderLight")),
                     exit => exit.remove()
                 )
                 .attr("d", b => b.d)
@@ -1711,7 +1726,7 @@ const MindMap: React.FC<MindMapProps> = ({
       
     nodeGroup.call(drag);
 
-  }, [data, dimensions, theme, linkStyle, onNodeExpand, onNodeSelect, themeColors, nodeWeights, layoutMode, shouldShowTree, sunData]); // Added sunData as dependency for background updates
+  }, [data, dimensions, theme, linkStyle, onNodeExpand, onNodeSelect, themeColors, nodeWeights, layoutMode, shouldShowTree, sunData, graphicsQuality]);
 
   const handleFoldBranch = () => {
     if (contextMenu.nodeId) {

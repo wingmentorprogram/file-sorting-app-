@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Search, Upload, Share2, Grid, Folder, FileText, Settings, X, Plus, BarChart2, Moon, Sun, Network, Sprout, Minus, Flower2, ArrowRight, Edit3, MapPin, FolderOpen, Video, Image as ImageIcon, ChevronRight, ChevronDown, Eye, EyeOff, Music, Table, FolderPlus, FilePlus, ArrowUp, Trash2, FileSearch, ExternalLink, Play, Link as LinkIcon, Download } from 'lucide-react';
+import { Search, Upload, Share2, Grid, Folder, FileText, Settings, X, Plus, BarChart2, Moon, Sun, Network, Sprout, Minus, Flower2, ArrowRight, Edit3, MapPin, FolderOpen, Video, Image as ImageIcon, ChevronRight, ChevronDown, Eye, EyeOff, Music, Table, FolderPlus, FilePlus, ArrowUp, Trash2, FileSearch, ExternalLink, Play, Link as LinkIcon, Download, Monitor, ChevronLeft, Bell, Zap, Calendar } from 'lucide-react';
 import MindMap from './components/MindMap';
 import Stats from './components/Stats';
 import ProjectsView from './components/ProjectsView';
@@ -22,6 +22,34 @@ const NODE_COLORS = [
 
 type TabType = 'all' | 'video' | 'photo' | 'doc' | 'audio' | 'data';
 
+// Mock Updates Data
+const UPDATES = [
+    {
+        id: 1,
+        version: 'v2.4.0',
+        date: 'Oct 24, 2024',
+        title: 'Tree Map Visualization',
+        description: 'Introduced a new organic layout mode. Watch your ideas grow from a single seed into a complex tree of knowledge.',
+        tag: 'New Feature'
+    },
+    {
+        id: 2,
+        version: 'v2.3.5',
+        date: 'Oct 10, 2024',
+        title: 'Google Drive Integration',
+        description: 'Seamlessly connect your cloud storage. Search and link files directly from your Google Drive into your mind maps.',
+        tag: 'Integration'
+    },
+    {
+        id: 3,
+        version: 'v2.3.0',
+        date: 'Sep 28, 2024',
+        title: 'Performance Boost',
+        description: 'Optimized rendering engine for large datasets. Graph interactions are now 40% smoother on mid-range devices.',
+        tag: 'Performance'
+    }
+];
+
 function App() {
   const [query, setQuery] = useState('');
   
@@ -36,12 +64,15 @@ function App() {
   const [theme, setTheme] = useState<AppTheme>(AppTheme.DEFAULT);
   const [linkStyle, setLinkStyle] = useState<LinkStyle>(LinkStyle.ROOT);
   const [layoutMode, setLayoutMode] = useState<LayoutMode>(LayoutMode.SPIDER);
+  const [graphicsQuality, setGraphicsQuality] = useState<'low' | 'mid' | 'high'>('high');
   const [showSettings, setShowSettings] = useState(false);
+  const [showGraphicsPrompt, setShowGraphicsPrompt] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<TabType>('all');
   const [isDriveConnected, setIsDriveConnected] = useState(false);
   
   // New State for Landing Page
   const [isLanding, setIsLanding] = useState(true);
+  const carouselRef = useRef<HTMLDivElement>(null);
 
   const themeConfig = THEMES[theme];
   const isDarkMode = theme === AppTheme.CYBER || theme === AppTheme.MINIMAL;
@@ -162,6 +193,11 @@ function App() {
         links
       });
       setQuery('');
+
+      // Show graphics prompt if Seed mode
+      if (mode === LayoutMode.SEED) {
+          setShowGraphicsPrompt(true);
+      }
   };
 
   const handleGoHome = () => {
@@ -861,69 +897,209 @@ function App() {
 
   const selectedDoc = selectedNode?.type === NodeType.DOCUMENT ? documents.find(d => d.id === selectedNode.id) : null;
 
+  // Carousel Scrolling Logic
+  const scrollCarousel = (direction: 'left' | 'right') => {
+      if (carouselRef.current) {
+          const scrollAmount = 300;
+          carouselRef.current.scrollBy({
+              left: direction === 'left' ? -scrollAmount : scrollAmount,
+              behavior: 'smooth'
+          });
+      }
+  };
+
   // --- RENDER LANDING PAGE ---
   if (isLanding) {
     return (
-        <div className={`min-h-screen flex flex-col items-center justify-center p-8 transition-colors duration-500 ${themeConfig.bg} ${themeConfig.text}`}>
-            <div className="max-w-4xl w-full text-center space-y-12">
-                <div className="space-y-4">
-                     <div className={`w-20 h-20 rounded-2xl mx-auto flex items-center justify-center text-white shadow-2xl ${themeConfig.accent}`}>
-                        <Network size={48} />
+        <div className={`min-h-screen flex flex-col transition-colors duration-500 overflow-y-auto ${themeConfig.bg} ${themeConfig.text}`}>
+            
+            {/* Header */}
+            <div className="w-full max-w-7xl mx-auto p-6 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl shadow-lg overflow-hidden border-2 border-white/20 bg-white">
+                        <img 
+                            src="https://lh3.googleusercontent.com/d/1wMV6X5tXkB5k_jMSTAcmZTEEV3xNGBMB" 
+                            alt="MindSearch AI" 
+                            className="w-full h-full object-cover"
+                        />
                     </div>
-                    <h1 className="text-5xl font-extrabold tracking-tight">MindSearch AI</h1>
-                    <p className="text-xl opacity-60 max-w-2xl mx-auto">
-                        Your intelligent documentation assistant. Choose your preferred visualization architecture to begin your search journey.
-                    </p>
+                    <span className="font-bold text-xl tracking-tight">MindSearch</span>
                 </div>
+                <button onClick={() => setTheme(prev => prev === AppTheme.CYBER ? AppTheme.DEFAULT : AppTheme.CYBER)} className={`p-2 rounded-full shadow-sm backdrop-blur-sm border transition-transform hover:scale-110 ${isDarkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-white/80 border-slate-200'}`}>
+                    {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+                </button>
+            </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-12">
-                    {/* SPIDER OPTION */}
-                    <button 
-                        onClick={() => handleStartProject(LayoutMode.SPIDER)}
-                        className={`group relative overflow-hidden p-8 rounded-3xl border-2 text-left transition-all duration-300 hover:shadow-2xl hover:scale-[1.02] ${isDarkMode ? 'bg-slate-800 border-slate-700 hover:border-cyan-500' : 'bg-white border-slate-200 hover:border-blue-500'}`}
-                    >
-                        <div className={`absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity`}>
-                            <Network size={120} />
-                        </div>
-                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 transition-colors ${isDarkMode ? 'bg-slate-700 group-hover:bg-cyan-900 text-cyan-400' : 'bg-blue-50 group-hover:bg-blue-100 text-blue-600'}`}>
-                             <Grid size={32} />
-                        </div>
-                        <h3 className="text-2xl font-bold mb-2">Spatial Spider</h3>
-                        <p className="opacity-60 mb-6 min-h-[3rem]">
-                            A classic, radial mind map interface. Nodes expand outward in all directions, perfect for exploring interconnected concepts in a web-like structure.
+            <div className="flex-1 flex flex-col items-center justify-center p-4 pb-16">
+                <div className="max-w-6xl w-full space-y-12">
+                    
+                    {/* Hero Text */}
+                    <div className="text-center space-y-4 mb-8">
+                        <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 pb-2">
+                            Visualize Your Knowledge
+                        </h1>
+                        <p className="text-xl opacity-60 max-w-2xl mx-auto">
+                            Transform scattered documents into an intelligent, interconnected mind map. Choose a visualization mode to begin your journey.
                         </p>
-                        <div className="flex items-center gap-2 font-bold text-sm uppercase tracking-wider">
-                            Select Mode <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-                        </div>
-                    </button>
+                    </div>
 
-                    {/* SEED OPTION */}
-                    <button 
-                        onClick={() => handleStartProject(LayoutMode.SEED)}
-                        className={`group relative overflow-hidden p-8 rounded-3xl border-2 text-left transition-all duration-300 hover:shadow-2xl hover:scale-[1.02] ${isDarkMode ? 'bg-slate-800 border-slate-700 hover:border-emerald-500' : 'bg-white border-slate-200 hover:border-green-500'}`}
-                    >
-                        <div className={`absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity`}>
-                            <Sprout size={120} />
+                    {/* Placards Carousel */}
+                    <div className="relative group">
+                        <button 
+                            onClick={() => scrollCarousel('left')}
+                            className={`absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 z-10 p-3 rounded-full shadow-xl border opacity-0 group-hover:opacity-100 transition-all hover:scale-110 ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                        >
+                            <ChevronLeft size={24} />
+                        </button>
+                        
+                        <div 
+                            ref={carouselRef}
+                            className="flex gap-6 overflow-x-auto snap-x snap-mandatory pb-8 pt-4 px-4 no-scrollbar scroll-smooth"
+                            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                        >
+                            {/* Spider Card */}
+                            <div className="snap-center flex-shrink-0 w-80 md:w-96">
+                                <div 
+                                    onClick={() => handleStartProject(LayoutMode.SPIDER)}
+                                    className={`relative h-[420px] rounded-[2rem] overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl border-4 group/card ${isDarkMode ? 'bg-slate-800 border-slate-700 hover:border-blue-500' : 'bg-white border-slate-100 hover:border-blue-500'}`}
+                                >
+                                    <div className="absolute inset-0 bg-gradient-to-b from-blue-500/10 to-transparent pointer-events-none" />
+                                    <div className="p-8 h-full flex flex-col">
+                                        <div className="w-16 h-16 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center mb-6 shadow-inner">
+                                            <Network size={32} />
+                                        </div>
+                                        <h3 className="text-3xl font-bold mb-3">Spider Mode</h3>
+                                        <p className="opacity-60 text-sm leading-relaxed mb-auto">
+                                            Classic radial mind map. Best for exploring interconnected concepts and brainstorming sessions where ideas branch out in all directions.
+                                        </p>
+                                        <div className="mt-6 flex items-center justify-between border-t border-dashed pt-6 border-current/20">
+                                            <span className="text-xs font-bold uppercase tracking-wider opacity-50">Layout</span>
+                                            <div className="px-4 py-2 rounded-lg bg-blue-600 text-white font-bold text-sm flex items-center gap-2 group-hover/card:gap-3 transition-all">
+                                                Launch <ArrowRight size={16} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {/* Abstract BG Pattern */}
+                                    <div className="absolute bottom-0 right-0 opacity-5 pointer-events-none transform translate-x-1/4 translate-y-1/4">
+                                        <Grid size={300} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Tree Card */}
+                            <div className="snap-center flex-shrink-0 w-80 md:w-96">
+                                <div 
+                                    onClick={() => handleStartProject(LayoutMode.SEED)}
+                                    className={`relative h-[420px] rounded-[2rem] overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl border-4 group/card ${isDarkMode ? 'bg-slate-800 border-slate-700 hover:border-emerald-500' : 'bg-white border-slate-100 hover:border-emerald-500'}`}
+                                >
+                                    <div className="absolute inset-0 bg-gradient-to-b from-emerald-500/10 to-transparent pointer-events-none" />
+                                    <div className="p-8 h-full flex flex-col">
+                                        <div className="w-16 h-16 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-6 shadow-inner">
+                                            <Sprout size={32} />
+                                        </div>
+                                        <h3 className="text-3xl font-bold mb-3">Tree Mode</h3>
+                                        <p className="opacity-60 text-sm leading-relaxed mb-auto">
+                                            Organic growth visualization. Ideas start as a seed and grow upwards. Features a dynamic day/night cycle and atmospheric effects.
+                                        </p>
+                                        <div className="mt-6 flex items-center justify-between border-t border-dashed pt-6 border-current/20">
+                                            <span className="text-xs font-bold uppercase tracking-wider opacity-50">Simulation</span>
+                                            <div className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-bold text-sm flex items-center gap-2 group-hover/card:gap-3 transition-all">
+                                                Launch <ArrowRight size={16} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {/* Abstract BG Pattern */}
+                                    <div className="absolute bottom-0 right-0 opacity-5 pointer-events-none transform translate-x-1/4 translate-y-1/4">
+                                        <Flower2 size={300} />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Library Shortcut */}
+                            <div className="snap-center flex-shrink-0 w-72 md:w-80">
+                                <div 
+                                    onClick={() => { setIsLanding(false); setCurrentView('projects'); }}
+                                    className={`relative h-[420px] rounded-[2rem] overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl border-2 group/card opacity-80 hover:opacity-100 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-white'}`}
+                                >
+                                    <div className="p-8 h-full flex flex-col justify-center items-center text-center">
+                                        <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 ${isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 shadow-sm'}`}>
+                                            <Folder size={24} />
+                                        </div>
+                                        <h3 className="text-xl font-bold mb-2">Project Library</h3>
+                                        <p className="opacity-50 text-xs mb-6">Manage your uploaded files and cloud connections.</p>
+                                        <span className="text-xs font-bold uppercase tracking-wider text-blue-500 flex items-center gap-1 group-hover/card:gap-2 transition-all">
+                                            Open Library <ArrowRight size={12} />
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                             {/* Stats Shortcut */}
+                             <div className="snap-center flex-shrink-0 w-72 md:w-80">
+                                <div 
+                                    onClick={() => { setIsLanding(false); setCurrentView('stats'); }}
+                                    className={`relative h-[420px] rounded-[2rem] overflow-hidden cursor-pointer transition-all duration-300 hover:scale-[1.02] hover:shadow-xl border-2 group/card opacity-80 hover:opacity-100 ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-50 border-white'}`}
+                                >
+                                    <div className="p-8 h-full flex flex-col justify-center items-center text-center">
+                                        <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 ${isDarkMode ? 'bg-slate-800 text-slate-400' : 'bg-white text-slate-500 shadow-sm'}`}>
+                                            <BarChart2 size={24} />
+                                        </div>
+                                        <h3 className="text-xl font-bold mb-2">Analytics</h3>
+                                        <p className="opacity-50 text-xs mb-6">View insights on your document usage and search trends.</p>
+                                        <span className="text-xs font-bold uppercase tracking-wider text-purple-500 flex items-center gap-1 group-hover/card:gap-2 transition-all">
+                                            View Stats <ArrowRight size={12} />
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
                         </div>
-                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-6 transition-colors ${isDarkMode ? 'bg-slate-700 group-hover:bg-emerald-900 text-emerald-400' : 'bg-green-50 group-hover:bg-green-100 text-green-600'}`}>
-                             <Flower2 size={32} />
+
+                        <button 
+                            onClick={() => scrollCarousel('right')}
+                            className={`absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 z-10 p-3 rounded-full shadow-xl border opacity-0 group-hover:opacity-100 transition-all hover:scale-110 ${isDarkMode ? 'bg-slate-800 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-800'}`}
+                        >
+                            <ChevronRight size={24} />
+                        </button>
+                    </div>
+
+                    {/* Updates & Changelog Component */}
+                    <div className="pt-12 border-t border-dashed border-current/10">
+                        <div className="flex items-center gap-3 mb-8">
+                            <div className="p-2 rounded-lg bg-orange-500/10 text-orange-500">
+                                <Bell size={20} />
+                            </div>
+                            <h2 className="text-2xl font-bold">Latest Updates</h2>
                         </div>
-                        <h3 className="text-2xl font-bold mb-2">Tree Map</h3>
-                        <p className="opacity-60 mb-6 min-h-[3rem]">
-                            An organic, growth-based interface. Ideas start as a seed in the ground and grow upwards like a tree against a sky backdrop.
-                        </p>
-                        <div className="flex items-center gap-2 font-bold text-sm uppercase tracking-wider">
-                            Select Mode <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            {UPDATES.map((update) => (
+                                <div key={update.id} className={`p-6 rounded-2xl border transition-all hover:shadow-lg ${isDarkMode ? 'bg-slate-800/50 border-slate-800 hover:bg-slate-800' : 'bg-white border-slate-200 hover:border-blue-200'}`}>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${isDarkMode ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
+                                            {update.version}
+                                        </span>
+                                        <div className="flex items-center gap-1 text-xs opacity-50">
+                                            <Calendar size={12} />
+                                            <span>{update.date}</span>
+                                        </div>
+                                    </div>
+                                    <h4 className="font-bold text-lg mb-2 flex items-center gap-2">
+                                        {update.title}
+                                        {update.id === 1 && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />}
+                                    </h4>
+                                    <p className="text-sm opacity-70 leading-relaxed mb-4 min-h-[3rem]">
+                                        {update.description}
+                                    </p>
+                                    <div className={`text-xs font-bold flex items-center gap-1 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                                        <Zap size={12} /> {update.tag}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                    </button>
+                    </div>
+
                 </div>
-                
-                {/* Theme Toggle on Landing */}
-                 <div className="absolute top-6 right-6">
-                    <button className={`p-3 rounded-full shadow-lg backdrop-blur-sm border transition-transform hover:scale-110 ${isDarkMode ? 'bg-slate-800/80 border-slate-700' : 'bg-white/80 border-slate-200'}`} onClick={() => setTheme(prev => prev === AppTheme.CYBER ? AppTheme.DEFAULT : AppTheme.CYBER)}>
-                        {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
-                    </button>
-                 </div>
             </div>
         </div>
     );
@@ -940,8 +1116,12 @@ function App() {
             className="p-4 flex items-center justify-center md:justify-start gap-3 border-b border-transparent cursor-pointer hover:opacity-80 transition-opacity"
             title="Return to Home"
         >
-           <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white ${themeConfig.accent}`}>
-             {layoutMode === LayoutMode.SEED ? <Flower2 size={20} /> : <Network size={20} />}
+           <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-white">
+             <img 
+                src="https://lh3.googleusercontent.com/d/1wMV6X5tXkB5k_jMSTAcmZTEEV3xNGBMB" 
+                alt="MindSearch" 
+                className="w-full h-full object-cover"
+             />
            </div>
            <span className="hidden md:block font-bold text-lg tracking-tight">MindSearch</span>
         </div>
@@ -1025,6 +1205,7 @@ function App() {
                     theme={theme}
                     linkStyle={linkStyle}
                     layoutMode={layoutMode}
+                    graphicsQuality={graphicsQuality}
                     focusedNodeId={selectedNode?.id}
                 />
             )}
@@ -1250,6 +1431,49 @@ function App() {
                 </div>
             )}
             
+            {/* Graphics Quality Prompt (Seed Mode Startup) */}
+            {showGraphicsPrompt && (
+                <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className={`w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden border p-8 text-center space-y-6 animate-in fade-in zoom-in duration-300 ${isDarkMode ? 'bg-slate-900/90 border-slate-700 text-white' : 'bg-white/90 border-slate-200 text-slate-900'}`}>
+                        <div className="mx-auto w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mb-4">
+                            <Sprout size={32} className="text-green-500" />
+                        </div>
+                        
+                        <div>
+                            <h2 className="text-3xl font-bold mb-2">Environment Settings</h2>
+                            <p className="opacity-70 text-lg">
+                                Customize the graphics quality for the best performance on your device.
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-4">
+                            {['low', 'mid', 'high'].map((q) => (
+                                <button
+                                    key={q}
+                                    onClick={() => setGraphicsQuality(q as any)}
+                                    className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${graphicsQuality === q ? 'border-green-500 bg-green-500/10 scale-105 shadow-lg' : 'border-transparent bg-slate-100 dark:bg-slate-800 opacity-70 hover:opacity-100 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                                >
+                                    <div className={`w-3 h-3 rounded-full ${q === 'high' ? 'bg-green-500' : q === 'mid' ? 'bg-yellow-500' : 'bg-red-500'}`} />
+                                    <span className="font-bold capitalize text-lg">{q}</span>
+                                    <span className="text-[10px] uppercase font-bold opacity-50 tracking-wider">
+                                        {q === 'low' ? 'Basic' : q === 'mid' ? 'Balanced' : 'Ultra'}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="pt-4">
+                            <button 
+                                onClick={() => setShowGraphicsPrompt(false)}
+                                className="w-full py-4 rounded-xl bg-green-600 hover:bg-green-500 text-white font-bold text-lg shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2"
+                            >
+                                Enter MindMap <ArrowRight size={20} />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
             {/* Settings Modal Overlay */}
             {showSettings && (
                 <div className="absolute inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
@@ -1284,6 +1508,21 @@ function App() {
                                 <div className="flex gap-2">
                                      <button onClick={() => setLinkStyle(LinkStyle.ROOT)} className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium ${linkStyle === LinkStyle.ROOT ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}>Organic</button>
                                      <button onClick={() => setLinkStyle(LinkStyle.STRAIGHT)} className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium ${linkStyle === LinkStyle.STRAIGHT ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}>Straight</button>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium mb-3 opacity-80">Graphics Quality (Tree Mode)</label>
+                                <div className="flex gap-2">
+                                        {['low', 'mid', 'high'].map((q) => (
+                                            <button
+                                                key={q}
+                                                onClick={() => setGraphicsQuality(q as any)}
+                                                className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium capitalize ${graphicsQuality === q ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}
+                                            >
+                                                {q}
+                                            </button>
+                                        ))}
                                 </div>
                             </div>
                         </div>
